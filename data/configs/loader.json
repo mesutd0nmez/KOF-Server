@@ -1,0 +1,9 @@
+{
+  "Path":"C:\\NTTGame\\KnightOnlineEn",
+  "Exe":"KnightOnLine.exe",
+  "DllPath":".\\",
+  "DllFile":".\\KOF.dll",
+  "Platform":0,
+  "DisableXingCode":false,
+  "NoInject":false
+}

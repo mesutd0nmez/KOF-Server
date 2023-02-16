@@ -1,0 +1,8 @@
+version: '3'
+
+services:
+  backend:
+    command: yarn dev
+  database:
+    networks:
+      - app
