@@ -112,7 +112,7 @@ class Login extends Event {
       packet.writeString(token, true)
     }
 
-    this.socket.write(packet.raw)
+    this.socket.emit('send', packet.raw)
   }
 }
 

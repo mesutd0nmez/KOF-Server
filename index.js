@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import { Server } from './src/server.js'
 
-mongoose.set("strictQuery", false);
+mongoose.set('strictQuery', false)
 
 mongoose
   .connect(process.env.MONGODB_URL)
@@ -13,6 +13,5 @@ mongoose
     server.createServer()
   })
   .catch((error) => {
-    console.info(error);
+    console.info(error)
   })
-

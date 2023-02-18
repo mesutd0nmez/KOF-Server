@@ -64,6 +64,30 @@ class Configuration extends Event {
           }
         }
         break
+      case ConfigurationRequestType.SAVE:
+        {
+          const configurationRawData = packet.readString(true)
+
+          let configurationCollection = await ConfigurationModel.findOne({
+            user_id: this.options.user_id,
+            app_type: appType,
+          })
+
+          if (configurationCollection) {
+            const configuration = JSON.parse(configurationRawData)
+
+            configurationCollection.configuration = configuration
+            configurationCollection.save()
+
+            console.info(`Configuration: User configuration saved`)
+          } else {
+            console.info(
+              `Configuration: Save failed for user not found, connection destroying`
+            )
+            this.socket.destroy()
+          }
+        }
+        break
     }
   }
 
@@ -82,7 +106,7 @@ class Configuration extends Event {
         break
     }
 
-    this.socket.write(packet.raw)
+    this.socket.emit('send', packet.raw)
   }
 }
 

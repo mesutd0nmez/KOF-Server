@@ -19,6 +19,7 @@
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "byte-buffer": "https://github.com/trkyshorty/byte-buffer#build",
+    "crypto": "^1.0.1",
     "dotenv": "^16.0.3",
     "events": "^3.3.0",
     "fs": "^0.0.1-security",
@@ -27,7 +28,8 @@
     "jsonwebtoken": "^9.0.0",
     "mongoose": "^6.9.1",
     "net": "^1.0.2",
-    "path": "^0.12.7"
+    "path": "^0.12.7",
+    "snappy": "^7.2.2"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
