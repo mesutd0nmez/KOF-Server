@@ -1,7 +1,6 @@
 import PacketHeader from '../core/enums/packetHeader.js'
 import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
-import generateSeed from '../utils/prng.js'
 import { createHash } from '../utils/cryption.js'
 
 class Ready extends Event {
@@ -15,7 +14,7 @@ class Ready extends Event {
   async recv(packet) {
     const processId = packet.readUnsignedBigInt()
 
-    this.socket.seed = generateSeed(parseInt(processId))
+    this.socket.generateSeed(parseInt(processId))
     this.socket.initialVector = createHash('md5', this.socket.seed.toString())
 
     console.info(`Ready: Socket ready with process id ${processId}`)
