@@ -1,0 +1,53 @@
+{
+  "name": "KOF-Server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/trkyshorty/KOF-Server.git",
+  "author": "Türkay Tanrikulu <trky.shorty@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "start": "pm2 start ecosystem.config.json --no-daemon",
+    "dev": "cross-env NODE_ENV=development node -r dotenv/config ./index.js",
+    "docker:start": "yarn docker:build && docker-compose -f docker-compose.yml -f docker-compose.prod.yml up",
+    "docker:dev": "yarn docker:build && docker-compose -f docker-compose.yml -f docker-compose.dev.yml up",
+    "docker:build": "docker-compose build",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "prettier": "prettier --check ./src/**/*.js",
+    "prettier:fix": "prettier --write ./src/**/*.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "byte-buffer": "https://github.com/trkyshorty/byte-buffer#build",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.0.3",
+    "events": "^3.3.0",
+    "fs": "^0.0.1-security",
+    "glob": "^8.1.0",
+    "iconv-lite": "^0.6.3",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^6.9.1",
+    "net": "^1.0.2",
+    "path": "^0.12.7",
+    "snappy": "^7.2.2"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "eslint": "^8.34.0",
+    "eslint-config-prettier": "^8.6.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "prettier": "^2.8.4"
+  },
+  "type": "module",
+  "plugins": [
+    "import"
+  ],
+  "rules": {
+    "import/no-unresolved": 2,
+    "import/no-commonjs": 2,
+    "import/extensions": [
+      2,
+      "ignorePackages"
+    ]
+  }
+}

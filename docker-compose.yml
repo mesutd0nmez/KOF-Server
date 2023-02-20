@@ -1,0 +1,36 @@
+version: '3'
+
+services:
+  backend:
+    build: .
+    ports:
+      - '${PORT}:${PORT}'
+    depends_on:
+      - database
+    volumes:
+      - app:/usr/src/kof-server
+    networks:
+      - app
+      - database
+
+  database:
+    image: mongo
+    command: mongod --port ${MONGODB_PORT}
+    ports:
+      - '${MONGODB_PORT}:${MONGODB_PORT}'
+    volumes:
+      - database:/data/db
+    networks:
+      - database
+
+volumes:
+  app:
+    driver: local
+  database:
+    driver: local
+
+networks:
+  app:
+    driver: bridge
+  database:
+    driver: ipvlan

@@ -1,0 +1,16 @@
+{
+  "apps": [
+    {
+      "name": "kof-server",
+      "script": "index.js",
+      "instances": 1,
+      "autorestart": true,
+      "watch": false,
+      "time": true,
+      "node_args" : "--require dotenv/config",
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  ]
+}
