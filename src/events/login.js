@@ -134,7 +134,6 @@ class Login extends Event {
 
       switch (type) {
         case LoginType.GENERIC: {
-          console.info(clientHardwareInfo)
           console.info(`Login: ${socket.user.email} - signing session token`)
 
           token = jwt.sign({ userId: socket.user._id }, process.env.TOKEN_KEY, {

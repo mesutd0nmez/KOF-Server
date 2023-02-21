@@ -50,6 +50,9 @@ class Server extends EventEmitter {
   }
 
   async initializeSocket(socket) {
+    socket.setKeepAlive(true)
+    socket.setNoDelay(true)
+
     console.log(`Connection: ${socket.remoteAddress}:${socket.remotePort}`)
 
     if (this.socketIdCounter == 65535) {
