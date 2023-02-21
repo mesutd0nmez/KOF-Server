@@ -22,8 +22,8 @@ class Configuration extends Event {
       case ConfigurationRequestType.LOAD:
         {
           let configurationCollection = await ConfigurationModel.findOne({
-            user_id: this.options.user_id,
-            app_type: appType,
+            userId: this.options.userId,
+            appType: appType,
           })
 
           if (!configurationCollection) {
@@ -37,8 +37,8 @@ class Configuration extends Event {
                   const defaultConfig = JSON.parse(defaultConfigRawData)
 
                   await ConfigurationModel.create({
-                    user_id: this.options.user_id,
-                    app_type: appType,
+                    userId: this.options.userId,
+                    appType: appType,
                     configuration: defaultConfig,
                   }).then((createdConfiguration) => {
                     configurationCollection = createdConfiguration
@@ -69,8 +69,8 @@ class Configuration extends Event {
           const configurationRawData = packet.readString(true)
 
           let configurationCollection = await ConfigurationModel.findOne({
-            user_id: this.options.user_id,
-            app_type: appType,
+            userId: this.options.userId,
+            appType: appType,
           })
 
           if (configurationCollection) {

@@ -4,14 +4,13 @@ class Event {
   constructor(socket, options) {
     Object.defineProperty(this, 'socket', { value: socket })
     this.options = options
-    this.options.user_id = 0
+    this.options.userId = 0
   }
 
   async validateToken() {
     try {
       const decoded = jwt.verify(this.socket.token, process.env.TOKEN_KEY)
-      this.options.user_id = decoded.user_id
-      console.info(`Middleware: User token verified`)
+      this.options.userId = decoded.userId
     } catch (err) {
       console.info(`Middleware: Invalid token, connection destroying`)
       this.socket.destroy()

@@ -12,25 +12,35 @@ class Ready extends Event {
   }
 
   async recv(packet) {
-    const processId = packet.readUnsignedBigInt()
+    const processId = packet.readUnsignedInt()
 
-    this.socket.generateSeed(parseInt(processId))
-    this.socket.initialVector = createHash('md5', this.socket.seed.toString())
+    this.socket.generateSeed(processId)
 
-    console.info(`Ready: Socket ready with process id ${processId}`)
+    this.socket.initialVector = createHash(
+      'md5',
+      createHash(
+        'sha256',
+        this.socket.seed.toString() + '.' + process.env.SALT_KEY
+      )
+    )
     console.info(
       `Ready: Seed - ${
         this.socket.seed
       } | IV - ${this.socket.initialVector.toString('hex')}`
     )
 
-    this.send()
+    const socketId = this.socket.generateSocketId()
+
+    await this.send(socketId)
+
+    this.socket.id = socketId
   }
 
-  async send() {
+  async send(socketId) {
     const packet = new ByteBuffer()
 
     packet.writeUnsignedByte(this.options.header)
+    packet.writeUnsignedInt(socketId)
 
     this.socket.emit('send', packet.raw)
   }

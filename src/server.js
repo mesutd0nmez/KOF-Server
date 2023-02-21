@@ -18,6 +18,8 @@ class Server extends EventEmitter {
     this.streamFooter = 0x55aa
 
     this.encryptionKey = createHash('sha256', process.env.ENCRYPTION_KEY)
+
+    this.socketIdCounter = 0
   }
 
   async buildEvents() {
@@ -37,7 +39,19 @@ class Server extends EventEmitter {
   async initializeSocket(socket) {
     console.log(`Connection: ${socket.remoteAddress}:${socket.remotePort}`)
 
+    if (this.socketIdCounter == 65535) {
+      this.socketIdCounter = 0
+    }
+
+    socket.generateSocketId = () => {
+      return this.socketIdCounter++
+    }
+
+    socket.id = -1
+    socket.sequenceId = 0
     socket.token = null
+    socket.user = null
+    socket.client = null
     socket.recv = new EventEmitter()
     socket.send = new EventEmitter()
 
@@ -51,8 +65,10 @@ class Server extends EventEmitter {
     }
 
     socket.generateSeed(((1881 * 1923) / 1993) << 16)
-    socket.initialVector = createHash('md5', socket.seed.toString())
-
+    socket.initialVector = createHash(
+      'md5',
+      createHash('sha256', socket.seed.toString() + '.' + process.env.SALT_KEY)
+    )
     console.info(
       `Connection: Seed - ${socket.seed} | IV - ${socket.initialVector.toString(
         'hex'
@@ -210,6 +226,28 @@ class Server extends EventEmitter {
           packet.writeUnsignedShort(this.streamFooter)
 
           socket.write(packet.raw)
+
+          if (socket.sequenceId == 255) {
+            socket.sequenceId = 0
+          }
+
+          if (socket.id != -1) {
+            socket.generateSeed(socket.seed + (socket.id + socket.sequenceId++))
+
+            socket.initialVector = createHash(
+              'md5',
+              createHash(
+                'sha256',
+                socket.seed.toString() + '.' + process.env.SALT_KEY
+              )
+            )
+
+            console.info(
+              `Ready: Seed - ${
+                socket.seed
+              } | IV - ${socket.initialVector.toString('hex')}`
+            )
+          }
         } catch (error) {
           console.info(error)
         }
@@ -222,10 +260,7 @@ class Server extends EventEmitter {
           )
 
           let index = sockets.findIndex(function (o) {
-            return (
-              o.remoteAddress === socket.remoteAddress &&
-              o.remotePort === socket.remotePort
-            )
+            return o.id === socket.id
           })
 
           if (index !== -1) sockets.splice(index, 1)
