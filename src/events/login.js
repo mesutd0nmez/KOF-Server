@@ -8,10 +8,14 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 
 class Login extends Event {
-  constructor(socket) {
-    super(socket, {
+  constructor(server, socket) {
+    super(server, socket, {
       header: PacketHeader.LOGIN,
       authorization: false,
+      rateLimitOpts: {
+        points: 5,
+        duration: 1, // Per second
+      },
     })
   }
 

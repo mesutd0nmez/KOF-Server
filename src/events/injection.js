@@ -6,10 +6,14 @@ import PlatformType from '../core/enums/platformType.js'
 import InjectionRequestType from '../core/enums/injectionRequestType.js'
 
 class Injection extends Event {
-  constructor(socket) {
-    super(socket, {
+  constructor(server, socket) {
+    super(server, socket, {
       header: PacketHeader.INJECTION,
       authorization: true,
+      rateLimitOpts: {
+        points: 5,
+        duration: 1, // Per second
+      },
     })
   }
 
@@ -65,7 +69,19 @@ class Injection extends Event {
           const accountIndex = packet.readUnsignedShort()
           const processId = packet.readUnsignedInt()
 
-          console.info(`${started} - ${accountIndex} - ${processId}`)
+          if (started != 0) {
+            this.server.injections.push({
+              userId: this.socket.user._id,
+              clientId: this.socket.client._id,
+              accountIndex: accountIndex,
+              processId: processId,
+              injectionTime: Math.floor(Date.now() / 1000),
+            })
+
+            console.info(`Injection: pid(${processId}) completed`)
+          } else {
+            console.info(`Injection: pid(${processId}) failed`)
+          }
         }
         break
     }

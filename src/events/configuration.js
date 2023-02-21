@@ -7,10 +7,14 @@ import ConfigurationModel from '../models/configuration.js'
 import fs from 'fs'
 
 class Configuration extends Event {
-  constructor(socket) {
-    super(socket, {
+  constructor(server, socket) {
+    super(server, socket, {
       header: PacketHeader.CONFIGURATION,
       authorization: true,
+      rateLimitOpts: {
+        points: 5,
+        duration: 1, // Per second
+      },
     })
   }
 

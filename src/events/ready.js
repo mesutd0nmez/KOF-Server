@@ -4,10 +4,14 @@ import Event from '../core/event.js'
 import { createHash } from '../utils/cryption.js'
 
 class Ready extends Event {
-  constructor(socket) {
-    super(socket, {
+  constructor(server, socket) {
+    super(server, socket, {
       header: PacketHeader.READY,
       authorization: false,
+      rateLimitOpts: {
+        points: 5,
+        duration: 1, // Per second
+      },
     })
   }
 
@@ -34,6 +38,8 @@ class Ready extends Event {
     await this.send(socketId)
 
     this.socket.id = socketId
+    this.socket.connectionReadyTime = Date.now()
+    this.socket.pingIntervalId = setInterval(this.socket.pingInterval, 30000)
   }
 
   async send(socketId) {
