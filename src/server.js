@@ -65,6 +65,7 @@ class Server extends EventEmitter {
 
     socket.connectionTime = Date.now()
     socket.connectionReadyTime = 0
+    socket.accountIndex = -1
     socket.id = -1
     socket.sequenceId = 0
     socket.token = null

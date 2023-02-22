@@ -32,6 +32,12 @@ class Login extends Event {
           const email = packet.readString(true)
           const password = packet.readString(true)
 
+          if (!email || !password) return
+
+          if (process.env.NODE_ENV !== 'development') {
+            if (email === 'me@kofbot.com') return
+          }
+
           clientHardwareInfo.systemName = packet.readString(true)
           clientHardwareInfo.serialNumber = packet.readString(true)
           clientHardwareInfo.processorId = packet.readString(true)
@@ -68,6 +74,8 @@ class Login extends Event {
       case LoginType.TOKEN:
         try {
           token = packet.readString(true)
+
+          if (!token) return
 
           clientHardwareInfo.systemName = packet.readString(true)
           clientHardwareInfo.serialNumber = packet.readString(true)

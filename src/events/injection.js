@@ -24,6 +24,7 @@ class Injection extends Event {
       case InjectionRequestType.REQUEST:
         {
           const platform = packet.readUnsignedByte()
+          this.socket.accountIndex = packet.readInt()
 
           let defaultLibrary = null
 
@@ -66,19 +67,19 @@ class Injection extends Event {
       case InjectionRequestType.REPORT:
         {
           const started = packet.readUnsignedByte()
-          const accountIndex = packet.readUnsignedShort()
           const processId = packet.readUnsignedInt()
 
           if (started != 0) {
             this.server.injections.push({
               userId: this.socket.user._id,
               clientId: this.socket.client._id,
-              accountIndex: accountIndex,
+              accountIndex: this.socket.accountIndex,
               processId: processId,
               injectionTime: Math.floor(Date.now() / 1000),
             })
 
             console.info(`Injection: pid(${processId}) completed`)
+            console.info(this.server.injections)
           } else {
             console.info(`Injection: pid(${processId}) failed`)
           }
