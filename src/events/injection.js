@@ -3,47 +3,87 @@ import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
 import fs from 'fs'
 import PlatformType from '../core/enums/platformType.js'
+import InjectionRequestType from '../core/enums/injectionRequestType.js'
 
 class Injection extends Event {
-  constructor(socket) {
-    super(socket, {
+  constructor(server, socket) {
+    super(server, socket, {
       header: PacketHeader.INJECTION,
       authorization: true,
+      rateLimitOpts: {
+        points: 5,
+        duration: 1, // Per second
+      },
     })
   }
 
   async recv(packet) {
-    const platform = packet.readUnsignedByte()
+    const type = packet.readUnsignedByte()
 
-    let defaultLibrary = null
-
-    switch (platform) {
-      case PlatformType.USKO:
+    switch (type) {
+      case InjectionRequestType.REQUEST:
         {
-          try {
-            defaultLibrary = await fs.readFileSync(`./data/libraries/usko.dll`)
-          } catch (error) {
-            console.info(error)
+          const platform = packet.readUnsignedByte()
+          this.socket.accountIndex = packet.readInt()
+
+          let defaultLibrary = null
+
+          switch (platform) {
+            case PlatformType.USKO:
+              {
+                try {
+                  defaultLibrary = await fs.readFileSync(
+                    `./data/libraries/usko.dll`
+                  )
+                } catch (error) {
+                  console.info(error)
+                }
+              }
+              break
+
+            case PlatformType.CNKO:
+              {
+                try {
+                  defaultLibrary = await fs.readFileSync(
+                    `./data/libraries/cnko.dll`
+                  )
+                } catch (error) {
+                  console.info(error)
+                }
+              }
+              break
+          }
+
+          if (defaultLibrary) {
+            console.info(`Injection: Library to be injected has been sent`)
+            this.send(defaultLibrary, defaultLibrary.length)
+          } else {
+            console.info(
+              `Injection: Unable to injection due to technical problem`
+            )
           }
         }
         break
-
-      case PlatformType.CNKO:
+      case InjectionRequestType.REPORT:
         {
-          try {
-            defaultLibrary = await fs.readFileSync(`./data/libraries/cnko.dll`)
-          } catch (error) {
-            console.info(error)
+          const started = packet.readUnsignedByte()
+          const processId = packet.readUnsignedInt()
+
+          if (started != 0) {
+            this.server.injections.push({
+              userId: this.socket.user._id,
+              clientId: this.socket.client._id,
+              accountIndex: this.socket.accountIndex,
+              processId: processId,
+              injectionTime: Math.floor(Date.now() / 1000),
+            })
+
+            console.info(`Injection: pid(${processId}) completed`)
+          } else {
+            console.info(`Injection: pid(${processId}) failed`)
           }
         }
         break
-    }
-
-    if (defaultLibrary) {
-      console.info(`Injection: Library to be injected has been sent`)
-      this.send(defaultLibrary, defaultLibrary.length)
-    } else {
-      console.info(`Injection: Unable to injection due to technical problem`)
     }
   }
 

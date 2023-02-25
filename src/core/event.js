@@ -1,17 +1,17 @@
 import jwt from 'jsonwebtoken'
 
 class Event {
-  constructor(socket, options) {
+  constructor(server, socket, options) {
+    Object.defineProperty(this, 'server', { value: server })
     Object.defineProperty(this, 'socket', { value: socket })
     this.options = options
-    this.options.user_id = 0
+    this.options.userId = 0
   }
 
   async validateToken() {
     try {
       const decoded = jwt.verify(this.socket.token, process.env.TOKEN_KEY)
-      this.options.user_id = decoded.user_id
-      console.info(`Middleware: User token verified`)
+      this.options.userId = decoded.userId
     } catch (err) {
       console.info(`Middleware: Invalid token, connection destroying`)
       this.socket.destroy()
@@ -21,7 +21,10 @@ class Event {
   }
 
   async middleWareRecv() {
-    if (this.options.authorization && !this.validateToken()) {
+    if (
+      this.options.authorization &&
+      (!this.validateToken() || this.socket == -1)
+    ) {
       return false
     }
 
@@ -29,12 +32,21 @@ class Event {
   }
 
   async handleRecv(packet) {
-    if (this.middleWareRecv()) {
-      this.recv(packet)
-    }
+    this.rateLimiter
+      .consume(this.socket.remoteAddress, 1)
+      .then(() => {
+        if (this.middleWareRecv()) {
+          this.recv(packet)
+        }
+      })
+      .catch(() => {
+        console.info(`Request rate limited`)
+      })
   }
 
-  async middleWareSend() {}
+  async middleWareSend() {
+    return true
+  }
 
   async handleSend(...args) {
     if (this.middleWareSend()) {

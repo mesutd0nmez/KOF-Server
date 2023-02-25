@@ -3,33 +3,51 @@ import LoginType from '../core/enums/loginType.js'
 import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
 import UserModel from '../models/user.js'
+import ClientModel from '../models/client.js'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 
 class Login extends Event {
-  constructor(socket) {
-    super(socket, {
+  constructor(server, socket) {
+    super(server, socket, {
       header: PacketHeader.LOGIN,
       authorization: false,
+      rateLimitOpts: {
+        points: 5,
+        duration: 1, // Per second
+      },
     })
   }
 
   async recv(packet) {
     const type = packet.readUnsignedByte()
 
-    let user = null
     let token = null
+    let clientHardwareInfo = {}
+    let socket = this.socket
+
     switch (type) {
       case LoginType.GENERIC:
         {
           const email = packet.readString(true)
           const password = packet.readString(true)
 
-          user = await UserModel.findOne({ email: email })
+          if (!email || !password) return
 
-          if (user) {
-            if (!(await bcrypt.compare(password, user.password))) {
-              user = null
+          if (process.env.NODE_ENV !== 'development') {
+            if (email === 'me@kofbot.com') return
+          }
+
+          clientHardwareInfo.systemName = packet.readString(true)
+          clientHardwareInfo.serialNumber = packet.readString(true)
+          clientHardwareInfo.processorId = packet.readString(true)
+          clientHardwareInfo.computerHardwareId = packet.readString(true)
+
+          socket.user = await UserModel.findOne({ email: email })
+
+          if (socket.user) {
+            if (!(await bcrypt.compare(password, socket.user.password))) {
+              socket.user = null
               console.info(`Login: ${email} - password does not match`)
             }
           } else {
@@ -44,7 +62,7 @@ class Login extends Event {
                 email: email,
                 password: hashedPassword,
               }).then((createdUser) => {
-                user = createdUser
+                socket.user = createdUser
                 console.info(`Login: ${createdUser.email} - created`)
               })
             } else {
@@ -56,40 +74,90 @@ class Login extends Event {
       case LoginType.TOKEN:
         try {
           token = packet.readString(true)
-          const decoded = jwt.verify(token, process.env.TOKEN_KEY)
-          user = await UserModel.findOne({ _id: decoded.user_id })
 
-          if (!user) {
+          if (!token) return
+
+          clientHardwareInfo.systemName = packet.readString(true)
+          clientHardwareInfo.serialNumber = packet.readString(true)
+          clientHardwareInfo.processorId = packet.readString(true)
+          clientHardwareInfo.computerHardwareId = packet.readString(true)
+
+          const decoded = jwt.verify(token, process.env.TOKEN_KEY)
+          socket.user = await UserModel.findOne({ _id: decoded.userId })
+
+          if (!socket.user) {
             console.info(`Login: There is no user with this token`)
           }
         } catch (err) {
           console.info(err)
-          user = null
+          socket.user = null
           console.info(`Login: Invalid token`)
         }
         break
     }
 
-    if (user) {
-      console.info(`Login: ${user.email} - logging in`)
+    if (socket.user) {
+      console.info(`Login: ${socket.user.email} - logging in`)
+
+      const findedClient = await ClientModel.findOne({
+        systemName: clientHardwareInfo.systemName,
+        serialNumber: clientHardwareInfo.serialNumber,
+        processorId: clientHardwareInfo.processorId,
+        computerHardwareId: clientHardwareInfo.computerHardwareId,
+      })
+
+      if (!findedClient) {
+        await ClientModel.create({
+          userId: socket.user._id,
+          systemName: clientHardwareInfo.systemName,
+          serialNumber: clientHardwareInfo.serialNumber,
+          processorId: clientHardwareInfo.processorId,
+          computerHardwareId: clientHardwareInfo.computerHardwareId,
+          ip: socket.remoteAddress,
+        }).then((client) => {
+          socket.client = client
+          console.info(
+            `Login: ${socket.user.email} - client ${client._id} created`
+          )
+        })
+      } else {
+        if (!socket.user._id.equals(findedClient.userId)) {
+          console.info(
+            `Login: ${socket.user.email} - client ${findedClient._id} registered another user (${findedClient.userId} != ${socket.user._id}), socket destroying`
+          )
+
+          return socket.destroy()
+        }
+
+        findedClient.ip = socket.remoteAddress
+
+        await findedClient.save()
+
+        socket.client = findedClient
+
+        console.info(
+          `Login: ${socket.user.email} - client ${socket.client._id}`
+        )
+      }
 
       switch (type) {
         case LoginType.GENERIC: {
-          console.info(`Login: ${user.email} - signing session token`)
+          console.info(`Login: ${socket.user.email} - signing session token`)
 
-          token = jwt.sign({ user_id: user._id }, process.env.TOKEN_KEY, {
+          token = jwt.sign({ userId: socket.user._id }, process.env.TOKEN_KEY, {
             expiresIn: '365d',
           })
 
           console.info(
-            `Login: ${user.email} - session token signed, sending to client`
+            `Login: ${socket.user.email} - session token signed, sending to client`
           )
           this.socket.token = token
           return this.send(type, 1, token)
         }
+
         case LoginType.TOKEN: {
           console.info(
-            `Login: ${user.email} - token validation success, user authorized`
+            `Login: ${socket.user.email} - token validation success, user authorized`
           )
           this.socket.token = token
           return this.send(type, 1)

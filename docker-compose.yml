@@ -8,6 +8,7 @@ services:
     depends_on:
       - database
     volumes:
+      - ./data:/usr/src/kof-server/data
       - app:/usr/src/kof-server
     networks:
       - app

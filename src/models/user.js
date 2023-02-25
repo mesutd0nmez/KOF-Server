@@ -10,7 +10,10 @@ const userSchema = mongoose.Schema(
       default: 0,
     },
   },
-  { versionKey: false }
+  {
+    versionKey: false,
+    timestamps: true,
+  }
 )
 
 const User = mongoose.model('User', userSchema)

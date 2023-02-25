@@ -2,8 +2,8 @@ import mongoose from 'mongoose'
 
 const configurationSchema = mongoose.Schema(
   {
-    user_id: { type: mongoose.Types.ObjectId, ref: 'User' },
-    app_type: {
+    userId: { type: mongoose.Types.ObjectId, ref: 'User' },
+    appType: {
       type: Number,
       enum: [0, 1, 2],
       default: 0,
@@ -22,11 +22,13 @@ const configurationSchema = mongoose.Schema(
       default: null,
     },
     configuration: {
-      type: Object,
-      required: true,
+      type: Buffer,
     },
   },
-  { versionKey: false }
+  {
+    versionKey: false,
+    timestamps: true,
+  }
 )
 
 const Configuration = mongoose.model('Configuration', configurationSchema)

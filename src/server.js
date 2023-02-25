@@ -3,10 +3,11 @@ import glob from 'glob'
 import path from 'path'
 import EventEmitter from 'events'
 import { ByteBuffer } from './utils/byteBuffer.js'
+import PacketHeader from './core/enums/packetHeader.js'
 import Snappy from 'snappy'
-import generateSeed from './utils/prng.js'
 import { createHash, encrypt, decrypt } from './utils/cryption.js'
-
+import { clearTimeout } from 'timers'
+import { RateLimiterMemory } from 'rate-limiter-flexible'
 class Server extends EventEmitter {
   constructor(options) {
     super()
@@ -19,6 +20,19 @@ class Server extends EventEmitter {
     this.streamFooter = 0x55aa
 
     this.encryptionKey = createHash('sha256', process.env.ENCRYPTION_KEY)
+
+    this.socketIdCounter = 0
+
+    this.injections = []
+
+    this.connectionRateLimitOpts = {
+      points: 5,
+      duration: 1,
+    }
+
+    this.connectionRateLimiter = new RateLimiterMemory(
+      this.connectionRateLimitOpts
+    )
   }
 
   async buildEvents() {
@@ -33,6 +47,92 @@ class Server extends EventEmitter {
           })
         )
       })
+  }
+
+  async initializeSocket(socket) {
+    socket.setKeepAlive(true)
+    socket.setNoDelay(true)
+
+    console.log(`Socket: ${socket.remoteAddress}:${socket.remotePort}`)
+
+    if (this.socketIdCounter == 65535) {
+      this.socketIdCounter = 0
+    }
+
+    socket.generateSocketId = () => {
+      return this.socketIdCounter++
+    }
+
+    socket.ready = false
+    socket.connectionTime = Date.now()
+    socket.connectionReadyTime = 0
+    socket.accountIndex = -1
+    socket.id = socket.generateSocketId()
+    socket.processId = -1
+    socket.sequenceId = 0
+    socket.token = null
+    socket.user = null
+    socket.client = null
+    socket.recv = new EventEmitter()
+    socket.send = new EventEmitter()
+
+    socket.recvBuffer = Buffer.alloc(0)
+
+    socket.responseTime = 0
+
+    socket.pingIntervalId = 0
+    socket.pingRequested = false
+
+    socket.waitingReadyTimeoutId = 0
+
+    socket.generateSeed = (a) => {
+      var t = (a += 0x6d2b79f5)
+      t = Math.imul(t ^ (t >>> 15), t | 1)
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+      socket.seed = (t ^ (t >>> 14)) >>> 0
+    }
+
+    socket.pingInterval = () => {
+      socket.send.emit(PacketHeader.PING)
+    }
+
+    socket.generateSeed(((1881 * 1923) / 1993) << 16)
+    socket.initialVector = createHash(
+      'md5',
+      createHash(
+        'sha256',
+        socket.seed.toString() + '.' + process.env.IV_SALT_KEY
+      )
+    )
+
+    await Promise.all(this.eventPromises).then(async (moduleList) => {
+      moduleList.forEach(async (module) => {
+        const event = new module.default(this, socket)
+
+        event.rateLimiter = new RateLimiterMemory(event.options.rateLimitOpts)
+
+        socket.recv.on(event.options.header, async (data) => {
+          event.handleRecv(data)
+        })
+
+        socket.send.on(event.options.header, async (...args) => {
+          event.handleSend(...args)
+        })
+      })
+    })
+
+    socket.waitingReadyTimeout = () => {
+      if (socket.connectionReadyTime == 0) {
+        console.info(
+          `Client not sended ready packet, is suspicious socket. Connection destroying`
+        )
+        socket.destroy()
+      }
+    }
+
+    socket.waitingReadyTimeoutId = setTimeout(socket.waitingReadyTimeout, 15000)
+
+    socket.send.emit(PacketHeader.READY)
   }
 
   async createServer() {
@@ -53,173 +153,210 @@ class Server extends EventEmitter {
     })
 
     let sockets = this.sockets
-    let promises = this.eventPromises
 
     this.server.on('connection', async (socket) => {
-      console.log(`Connection: ${socket.remoteAddress}:${socket.remotePort}`)
+      this.connectionRateLimiter
+        .consume(socket.remoteAddress, 1)
+        .then(() => {
+          this.initializeSocket(socket)
 
-      socket.token = null
-      socket.recv = new EventEmitter()
-      socket.recvBuffer = Buffer.alloc(0)
-      socket.send = new EventEmitter()
-      socket.seed = generateSeed(((1881 * 1923) / 1993) << 16)
-      socket.initialVector = createHash('md5', socket.seed.toString())
+          socket.on('data', async (data) => {
+            try {
+              const startDelimeter = data.slice(0, 2)
 
-      console.info(
-        `Connection: Seed - ${
-          socket.seed
-        } | IV - ${socket.initialVector.toString('hex')}`
-      )
+              if (
+                socket.recvBuffer.length == 0 &&
+                !startDelimeter.equals(Buffer.from([0x55, 0xaa]))
+              ) {
+                console.info(
+                  'Process packet failed, packet not starting with 0xaa55, connection destroying'
+                )
+                return socket.destroy()
+              }
 
-      Promise.all(promises).then(async (moduleList) => {
-        moduleList.forEach(async (module) => {
-          const event = new module.default(socket)
+              if (data.length < 10) {
+                console.info(
+                  'Process packet failed, packet size need minimum 9, connection destroying'
+                )
+                return socket.destroy()
+              }
 
-          socket.recv.on(event.options.header, async (data) => {
-            event.handleRecv(data)
+              const endDelimeter = data.slice(data.length - 2, data.length)
+
+              socket.recvBuffer = Buffer.concat([socket.recvBuffer, data])
+
+              if (endDelimeter.equals(Buffer.from([0xaa, 0x55]))) {
+                socket.emit('recv', socket.recvBuffer)
+                socket.recvBuffer = Buffer.alloc(0)
+              }
+            } catch (error) {
+              console.info(error)
+            }
           })
 
-          socket.send.on(event.options.header, async (...args) => {
-            event.handleSend(...args)
+          socket.on('recv', async (data) => {
+            try {
+              const startDelimeter = data.slice(0, 2)
+              const endDelimeter = data.slice(data.length - 2, data.length)
+
+              if (!startDelimeter.equals(Buffer.from([0x55, 0xaa]))) {
+                console.info('Process packet failed, StreamHeader != 0xaa55')
+                return socket.destroy()
+              }
+
+              if (!endDelimeter.equals(Buffer.from([0xaa, 0x55]))) {
+                console.info('Process packet failed, StreamFooter != 0x55aa')
+                return socket.destroy()
+              }
+
+              //Decrypt Packet
+              const decryptionBuffer = decrypt(
+                data.slice(2, data.length - 2),
+                this.encryptionKey,
+                socket.initialVector
+              )
+
+              let decryptedPacket = new ByteBuffer(Array.from(decryptionBuffer))
+
+              //Compression Flag
+              const flag = decryptedPacket.readUnsignedByte()
+
+              //Raw packet size
+              decryptedPacket.readUnsignedInt()
+
+              if (flag) {
+                //Compressed packet size
+                decryptedPacket.readUnsignedInt()
+
+                const packetCommpressed = decryptedPacket.read()
+
+                let uncompressedPacket = await Snappy.uncompress(
+                  packetCommpressed.raw
+                )
+
+                decryptedPacket = new ByteBuffer(uncompressedPacket)
+              }
+
+              const packetHeader = decryptedPacket.readByte()
+
+              if (decryptedPacket.available > 0) {
+                const packetBody = decryptedPacket.read()
+                socket.recv.emit(packetHeader, new ByteBuffer(packetBody))
+              } else {
+                socket.recv.emit(packetHeader)
+              }
+            } catch (error) {
+              console.info(error)
+            }
           })
+
+          socket.on('send', async (data, compress = false) => {
+            try {
+              const packet = new ByteBuffer()
+
+              //Stream Header
+              packet.writeUnsignedShort(this.streamHeader)
+
+              const encryptionPacket = new ByteBuffer()
+
+              //Packet
+              if (compress) {
+                encryptionPacket.writeUnsignedByte(1) //compression flag
+                encryptionPacket.writeUnsignedInt(data.length) //raw packet size
+
+                const compressedData = await Snappy.compress(data)
+
+                encryptionPacket.writeUnsignedInt(compressedData.length) //compressed packet size
+                encryptionPacket.write(compressedData) //compressed data
+              } else {
+                encryptionPacket.writeUnsignedByte(0) //compression flag
+                encryptionPacket.writeUnsignedInt(data.length) //raw packet size
+
+                encryptionPacket.write(data) //raw data
+              }
+
+              //Encrypt Packet
+              const encryptedPacket = encrypt(
+                encryptionPacket.raw,
+                this.encryptionKey,
+                socket.initialVector
+              )
+
+              //Write Encrypted Packet
+              packet.write(encryptedPacket)
+
+              //Stream Footer
+              packet.writeUnsignedShort(this.streamFooter)
+
+              socket.write(packet.raw)
+
+              if (socket.sequenceId == 255) {
+                socket.sequenceId = 0
+              }
+
+              /*if (socket.id != -1) {
+                socket.generateSeed(
+                  socket.seed + (socket.id + socket.sequenceId++)
+                )
+
+                socket.initialVector = createHash(
+                  'md5',
+                  createHash(
+                    'sha256',
+                    socket.seed.toString() + '.' + process.env.SALT_KEY
+                  )
+                )
+
+                console.info(
+                  `Ready: Seed - ${
+                    socket.seed
+                  } | IV - ${socket.initialVector.toString('hex')}`
+                )
+              }*/
+            } catch (error) {
+              console.info(error)
+            }
+          })
+
+          socket.on('close', async () => {
+            try {
+              console.log(
+                'Close: ' + socket.remoteAddress + ':' + socket.remotePort
+              )
+
+              let index = sockets.findIndex(function (o) {
+                return o.id === socket.id
+              })
+
+              if (index !== -1) sockets.splice(index, 1)
+
+              clearTimeout(socket.waitingReadyTimeoutId)
+              clearInterval(socket.pingIntervalId)
+              socket.removeAllListeners()
+              socket.recv.removeAllListeners()
+              socket.send.removeAllListeners()
+            } catch (error) {
+              console.info(error)
+            }
+          })
+
+          socket.on('error', async (error) => {
+            console.log(
+              'Error: ' +
+                socket.remoteAddress +
+                ':' +
+                socket.remotePort +
+                ' - ' +
+                error.code
+            )
+          })
+
+          sockets.push(socket)
         })
-      })
-
-      socket.on('data', async (data) => {
-        if (data.length < 10) {
-          console.info(
-            'Process packet failed, packet size need minimum 9, connection destroying'
-          )
+        .catch(() => {
+          console.info(`Connection rate limited, socket destroying`)
           socket.destroy()
-          return
-        }
-
-        const endDelimeter = data.slice(data.length - 2, data.length)
-
-        socket.recvBuffer = Buffer.concat([socket.recvBuffer, data])
-
-        if (endDelimeter.equals(Buffer.from([0xaa, 0x55]))) {
-          socket.emit('recv', socket.recvBuffer)
-          socket.recvBuffer = Buffer.alloc(0)
-        }
-      })
-
-      socket.on('recv', async (data) => {
-        const startDelimeter = data.slice(0, 2)
-        const endDelimeter = data.slice(data.length - 2, data.length)
-
-        if (!startDelimeter.equals(Buffer.from([0x55, 0xaa]))) {
-          console.info('Process packet failed, StreamHeader != 0xaa55')
-          return
-        }
-
-        if (!endDelimeter.equals(Buffer.from([0xaa, 0x55]))) {
-          console.info('Process packet failed, StreamFooter != 0x55aa')
-          return
-        }
-
-        //Decrypt Packet
-        const decryptionBuffer = decrypt(
-          data.slice(2, data.length - 2),
-          this.encryptionKey,
-          socket.initialVector
-        )
-
-        let decryptedPacket = new ByteBuffer(Array.from(decryptionBuffer))
-
-        //Compression Flag
-        const flag = decryptedPacket.readUnsignedByte()
-
-        //Raw packet size
-        decryptedPacket.readUnsignedInt()
-
-        if (flag) {
-          //Compressed packet size
-          decryptedPacket.readUnsignedInt()
-
-          const packetCommpressed = decryptedPacket.read()
-
-          let uncompressedPacket = await Snappy.uncompress(
-            packetCommpressed.raw
-          )
-
-          decryptedPacket = new ByteBuffer(uncompressedPacket)
-        }
-
-        const packetHeader = decryptedPacket.readByte()
-        const packetBody = decryptedPacket.read()
-
-        socket.recv.emit(packetHeader, new ByteBuffer(packetBody))
-      })
-
-      socket.on('send', async (data, compress = false) => {
-        const packet = new ByteBuffer()
-
-        //Stream Header
-        packet.writeUnsignedShort(this.streamHeader)
-
-        const encryptionPacket = new ByteBuffer()
-
-        //Packet
-        if (compress) {
-          encryptionPacket.writeUnsignedByte(1) //compression flag
-          encryptionPacket.writeUnsignedInt(data.length) //raw packet size
-
-          const compressedData = await Snappy.compress(data)
-
-          encryptionPacket.writeUnsignedInt(compressedData.length) //compressed packet size
-          encryptionPacket.write(compressedData) //compressed data
-        } else {
-          encryptionPacket.writeUnsignedByte(0) //compression flag
-          encryptionPacket.writeUnsignedInt(data.length) //raw packet size
-
-          encryptionPacket.write(data) //raw data
-        }
-
-        //Encrypt Packet
-        const encryptedPacket = encrypt(
-          encryptionPacket.raw,
-          this.encryptionKey,
-          socket.initialVector
-        )
-
-        //Write Encrypted Packet
-        packet.write(encryptedPacket)
-
-        //Stream Footer
-        packet.writeUnsignedShort(this.streamFooter)
-
-        socket.write(packet.raw)
-      })
-
-      socket.on('close', async () => {
-        console.log('Close: ' + socket.remoteAddress + ':' + socket.remotePort)
-
-        let index = sockets.findIndex(function (o) {
-          return (
-            o.remoteAddress === socket.remoteAddress &&
-            o.remotePort === socket.remotePort
-          )
         })
-
-        if (index !== -1) sockets.splice(index, 1)
-
-        socket.recv.removeAllListeners()
-        socket.send.removeAllListeners()
-      })
-
-      socket.on('error', async (error) => {
-        console.log(
-          'Error: ' +
-            socket.remoteAddress +
-            ':' +
-            socket.remotePort +
-            ' - ' +
-            error.code
-        )
-      })
-
-      sockets.push(socket)
     })
   }
 }

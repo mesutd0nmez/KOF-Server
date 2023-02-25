@@ -7,10 +7,14 @@ import ConfigurationModel from '../models/configuration.js'
 import fs from 'fs'
 
 class Configuration extends Event {
-  constructor(socket) {
-    super(socket, {
+  constructor(server, socket) {
+    super(server, socket, {
       header: PacketHeader.CONFIGURATION,
       authorization: true,
+      rateLimitOpts: {
+        points: 5,
+        duration: 1, // Per second
+      },
     })
   }
 
@@ -18,73 +22,67 @@ class Configuration extends Event {
     const type = packet.readUnsignedByte()
     const appType = packet.readUnsignedByte()
 
-    switch (type) {
-      case ConfigurationRequestType.LOAD:
+    switch (appType) {
+      case AppType.BOT:
         {
-          let configurationCollection = await ConfigurationModel.findOne({
-            user_id: this.options.user_id,
-            app_type: appType,
-          })
+          switch (type) {
+            case ConfigurationRequestType.LOAD:
+              {
+                const platform = packet.readUnsignedByte()
+                const serverIndex = packet.readUnsignedByte()
+                const characterName = packet.readString(true)
 
-          if (!configurationCollection) {
-            switch (appType) {
-              case AppType.LOADER:
-                {
-                  const defaultConfigRawData = fs.readFileSync(
-                    './data/configs/loader.json'
-                  )
+                let configurationCollection = await ConfigurationModel.findOne({
+                  userId: this.options.userId,
+                  appType: appType,
+                  platform: platform,
+                  server: serverIndex,
+                  name: characterName,
+                })
 
-                  const defaultConfig = JSON.parse(defaultConfigRawData)
-
+                if (!configurationCollection) {
                   await ConfigurationModel.create({
-                    user_id: this.options.user_id,
-                    app_type: appType,
-                    configuration: defaultConfig,
+                    userId: this.options.userId,
+                    appType: appType,
+                    platform: platform,
+                    server: serverIndex,
+                    name: characterName,
+                    configuration: null,
                   }).then((createdConfiguration) => {
                     configurationCollection = createdConfiguration
                     console.info(
                       `Configuration: User default configuration created`
                     )
                   })
+                } else {
+                  console.info(`Configuration: User configuration loaded`)
                 }
-                break
-            }
-          }
 
-          if (configurationCollection) {
-            console.info(`Configuration: User configuration loaded`)
-            this.send(
-              type,
-              JSON.stringify(configurationCollection.configuration)
-            )
-          } else {
-            console.info(
-              `Configuration: Unable to load due to technical problem`
-            )
-          }
-        }
-        break
-      case ConfigurationRequestType.SAVE:
-        {
-          const configurationRawData = packet.readString(true)
+                this.send(type, configurationCollection.configuration)
+              }
+              break
+            case ConfigurationRequestType.SAVE:
+              {
+                const platform = packet.readUnsignedByte()
+                const serverIndex = packet.readUnsignedByte()
+                const characterName = packet.readString(true)
+                const configurationData = packet.readString(true)
 
-          let configurationCollection = await ConfigurationModel.findOne({
-            user_id: this.options.user_id,
-            app_type: appType,
-          })
+                await ConfigurationModel.updateOne(
+                  {
+                    userId: this.options.userId,
+                    appType: appType,
+                    platform: platform,
+                    server: serverIndex,
+                    name: characterName,
+                  },
+                  { configuration: configurationData },
+                  { upsert: true }
+                )
 
-          if (configurationCollection) {
-            const configuration = JSON.parse(configurationRawData)
-
-            configurationCollection.configuration = configuration
-            configurationCollection.save()
-
-            console.info(`Configuration: User configuration saved`)
-          } else {
-            console.info(
-              `Configuration: Save failed for user not found, connection destroying`
-            )
-            this.socket.destroy()
+                console.info(`Configuration: User configuration saved`)
+              }
+              break
           }
         }
         break
@@ -98,15 +96,11 @@ class Configuration extends Event {
 
     packet.writeUnsignedByte(type)
 
-    switch (type) {
-      case ConfigurationRequestType.LOAD:
-        {
-          packet.writeString(configuration, true)
-        }
-        break
+    if (configuration) {
+      packet.writeString(configuration, true)
     }
 
-    this.socket.emit('send', packet.raw)
+    this.socket.emit('send', packet.raw, true)
   }
 }
 
