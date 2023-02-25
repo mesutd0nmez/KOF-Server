@@ -79,7 +79,6 @@ class Injection extends Event {
             })
 
             console.info(`Injection: pid(${processId}) completed`)
-            console.info(this.server.injections)
           } else {
             console.info(`Injection: pid(${processId}) failed`)
           }

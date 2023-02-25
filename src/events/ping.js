@@ -34,9 +34,9 @@ class Ping extends Event {
 
   async send() {
     if (this.socket.pingRequested) {
-      if (Date.now() - this.socket.lastPingTime >= 30000) {
+      if (Date.now() - this.socket.lastPingTime >= 60000) {
         console.info(
-          `Pong was not sent in the appropriate time interval (30s), socket connection destroying`
+          `Pong was not sent in the appropriate time interval (60s), socket connection destroying`
         )
 
         return this.socket.destroy()

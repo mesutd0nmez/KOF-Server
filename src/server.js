@@ -53,7 +53,7 @@ class Server extends EventEmitter {
     socket.setKeepAlive(true)
     socket.setNoDelay(true)
 
-    console.log(`Connection: ${socket.remoteAddress}:${socket.remotePort}`)
+    console.log(`Socket: ${socket.remoteAddress}:${socket.remotePort}`)
 
     if (this.socketIdCounter == 65535) {
       this.socketIdCounter = 0
@@ -63,10 +63,12 @@ class Server extends EventEmitter {
       return this.socketIdCounter++
     }
 
+    socket.ready = false
     socket.connectionTime = Date.now()
     socket.connectionReadyTime = 0
     socket.accountIndex = -1
-    socket.id = -1
+    socket.id = socket.generateSocketId()
+    socket.processId = -1
     socket.sequenceId = 0
     socket.token = null
     socket.user = null
@@ -76,6 +78,13 @@ class Server extends EventEmitter {
 
     socket.recvBuffer = Buffer.alloc(0)
 
+    socket.responseTime = 0
+
+    socket.pingIntervalId = 0
+    socket.pingRequested = false
+
+    socket.waitingReadyTimeoutId = 0
+
     socket.generateSeed = (a) => {
       var t = (a += 0x6d2b79f5)
       t = Math.imul(t ^ (t >>> 15), t | 1)
@@ -83,27 +92,20 @@ class Server extends EventEmitter {
       socket.seed = (t ^ (t >>> 14)) >>> 0
     }
 
-    socket.pingIntervalId = 0
-    socket.pingRequested = false
-
     socket.pingInterval = () => {
       socket.send.emit(PacketHeader.PING)
     }
 
-    socket.responseTime = 0
-
     socket.generateSeed(((1881 * 1923) / 1993) << 16)
     socket.initialVector = createHash(
       'md5',
-      createHash('sha256', socket.seed.toString() + '.' + process.env.SALT_KEY)
-    )
-    console.info(
-      `Connection: Seed - ${socket.seed} | IV - ${socket.initialVector.toString(
-        'hex'
-      )}`
+      createHash(
+        'sha256',
+        socket.seed.toString() + '.' + process.env.IV_SALT_KEY
+      )
     )
 
-    Promise.all(this.eventPromises).then(async (moduleList) => {
+    await Promise.all(this.eventPromises).then(async (moduleList) => {
       moduleList.forEach(async (module) => {
         const event = new module.default(this, socket)
 
@@ -119,8 +121,6 @@ class Server extends EventEmitter {
       })
     })
 
-    socket.waitingReadyTimeoutId = 0
-
     socket.waitingReadyTimeout = () => {
       if (socket.connectionReadyTime == 0) {
         console.info(
@@ -131,6 +131,8 @@ class Server extends EventEmitter {
     }
 
     socket.waitingReadyTimeoutId = setTimeout(socket.waitingReadyTimeout, 15000)
+
+    socket.send.emit(PacketHeader.READY)
   }
 
   async createServer() {
@@ -292,7 +294,7 @@ class Server extends EventEmitter {
                 socket.sequenceId = 0
               }
 
-              if (socket.id != -1) {
+              /*if (socket.id != -1) {
                 socket.generateSeed(
                   socket.seed + (socket.id + socket.sequenceId++)
                 )
@@ -310,7 +312,7 @@ class Server extends EventEmitter {
                     socket.seed
                   } | IV - ${socket.initialVector.toString('hex')}`
                 )
-              }
+              }*/
             } catch (error) {
               console.info(error)
             }

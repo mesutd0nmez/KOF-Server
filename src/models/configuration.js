@@ -22,8 +22,7 @@ const configurationSchema = mongoose.Schema(
       default: null,
     },
     configuration: {
-      type: Object,
-      required: true,
+      type: Buffer,
     },
   },
   {
