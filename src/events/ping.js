@@ -32,26 +32,7 @@ class Ping extends Event {
     console.info(`Ping: Response time - ${this.socket.responseTime}ms`)
   }
 
-  async send() {
-    if (this.socket.pingRequested) {
-      if (Date.now() - this.socket.lastPingTime >= 60000) {
-        console.info(
-          `Pong was not sent in the appropriate time interval (60s), socket connection destroying`
-        )
-
-        return this.socket.destroy()
-      }
-    } else {
-      const packet = new ByteBuffer()
-
-      packet.writeUnsignedByte(this.options.header)
-
-      this.socket.lastPingTime = Date.now()
-      this.socket.pingRequested = true
-
-      this.socket.emit('send', packet.raw)
-    }
-  }
+  async send() {}
 }
 
 export default Ping
