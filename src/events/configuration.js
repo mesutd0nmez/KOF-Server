@@ -4,7 +4,6 @@ import AppType from '../core/enums/appType.js'
 import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
 import ConfigurationModel from '../models/configuration.js'
-import fs from 'fs'
 
 class Configuration extends Event {
   constructor(server, socket) {
@@ -23,6 +22,62 @@ class Configuration extends Event {
     const appType = packet.readUnsignedByte()
 
     switch (appType) {
+      case AppType.LOADER:
+        {
+          switch (type) {
+            case ConfigurationRequestType.LOAD:
+              {
+                let configurationCollection = await ConfigurationModel.findOne({
+                  userId: this.options.userId,
+                  appType: appType,
+                  platform: 0,
+                  server: 0,
+                  name: null,
+                })
+
+                if (!configurationCollection) {
+                  await ConfigurationModel.create({
+                    userId: this.options.userId,
+                    appType: appType,
+                    platform: 0,
+                    server: 0,
+                    name: null,
+                    configuration: null,
+                  }).then((createdConfiguration) => {
+                    configurationCollection = createdConfiguration
+                    console.info(
+                      `Configuration: User default configuration created`
+                    )
+                  })
+                } else {
+                  console.info(`Configuration: User configuration loaded`)
+                }
+
+                this.send(type, configurationCollection.configuration)
+              }
+              break
+            case ConfigurationRequestType.SAVE:
+              {
+                const configurationData = packet.readString(true)
+
+                await ConfigurationModel.updateOne(
+                  {
+                    userId: this.options.userId,
+                    appType: appType,
+                    platform: 0,
+                    server: 0,
+                    name: null,
+                  },
+                  { configuration: configurationData },
+                  { upsert: true }
+                )
+
+                console.info(`Configuration: User configuration saved`)
+              }
+              break
+          }
+        }
+        break
       case AppType.BOT:
         {
           switch (type) {

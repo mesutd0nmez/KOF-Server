@@ -23,8 +23,6 @@ class Server extends EventEmitter {
 
     this.socketIdCounter = 0
 
-    this.injections = []
-
     this.connectionRateLimitOpts = {
       points: 5,
       duration: 1,
@@ -66,10 +64,8 @@ class Server extends EventEmitter {
     socket.ready = false
     socket.connectionTime = Date.now()
     socket.connectionReadyTime = 0
-    socket.accountIndex = -1
     socket.id = socket.generateSocketId()
     socket.processId = -1
-    socket.sequenceId = 0
     socket.token = null
     socket.user = null
     socket.client = null
@@ -131,8 +127,6 @@ class Server extends EventEmitter {
     }
 
     socket.waitingReadyTimeoutId = setTimeout(socket.waitingReadyTimeout, 15000)
-
-    socket.send.emit(PacketHeader.READY)
   }
 
   async createServer() {
@@ -171,14 +165,14 @@ class Server extends EventEmitter {
                 console.info(
                   'Process packet failed, packet not starting with 0xaa55, connection destroying'
                 )
-                return socket.destroy()
+                return
               }
 
               if (data.length < 10) {
                 console.info(
                   'Process packet failed, packet size need minimum 9, connection destroying'
                 )
-                return socket.destroy()
+                return
               }
 
               const endDelimeter = data.slice(data.length - 2, data.length)
@@ -201,12 +195,12 @@ class Server extends EventEmitter {
 
               if (!startDelimeter.equals(Buffer.from([0x55, 0xaa]))) {
                 console.info('Process packet failed, StreamHeader != 0xaa55')
-                return socket.destroy()
+                return
               }
 
               if (!endDelimeter.equals(Buffer.from([0xaa, 0x55]))) {
                 console.info('Process packet failed, StreamFooter != 0x55aa')
-                return socket.destroy()
+                return
               }
 
               //Decrypt Packet
@@ -289,30 +283,6 @@ class Server extends EventEmitter {
               packet.writeUnsignedShort(this.streamFooter)
 
               socket.write(packet.raw)
-
-              if (socket.sequenceId == 255) {
-                socket.sequenceId = 0
-              }
-
-              /*if (socket.id != -1) {
-                socket.generateSeed(
-                  socket.seed + (socket.id + socket.sequenceId++)
-                )
-
-                socket.initialVector = createHash(
-                  'md5',
-                  createHash(
-                    'sha256',
-                    socket.seed.toString() + '.' + process.env.SALT_KEY
-                  )
-                )
-
-                console.info(
-                  `Ready: Seed - ${
-                    socket.seed
-                  } | IV - ${socket.initialVector.toString('hex')}`
-                )
-              }*/
             } catch (error) {
               console.info(error)
             }

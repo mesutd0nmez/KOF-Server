@@ -39,9 +39,11 @@ class Login extends Event {
           }
 
           clientHardwareInfo.systemName = packet.readString(true)
-          clientHardwareInfo.serialNumber = packet.readString(true)
           clientHardwareInfo.processorId = packet.readString(true)
-          clientHardwareInfo.computerHardwareId = packet.readString(true)
+          clientHardwareInfo.baseBoardSerial = packet.readString(true)
+          clientHardwareInfo.hddSerial = packet.readString(true)
+          clientHardwareInfo.uuid = packet.readString(true)
+          clientHardwareInfo.systemSerialNumber = packet.readString(true)
 
           socket.user = await UserModel.findOne({ email: email })
 
@@ -78,9 +80,11 @@ class Login extends Event {
           if (!token) return
 
           clientHardwareInfo.systemName = packet.readString(true)
-          clientHardwareInfo.serialNumber = packet.readString(true)
           clientHardwareInfo.processorId = packet.readString(true)
-          clientHardwareInfo.computerHardwareId = packet.readString(true)
+          clientHardwareInfo.baseBoardSerial = packet.readString(true)
+          clientHardwareInfo.hddSerial = packet.readString(true)
+          clientHardwareInfo.uuid = packet.readString(true)
+          clientHardwareInfo.systemSerialNumber = packet.readString(true)
 
           const decoded = jwt.verify(token, process.env.TOKEN_KEY)
           socket.user = await UserModel.findOne({ _id: decoded.userId })
@@ -101,18 +105,22 @@ class Login extends Event {
 
       const findedClient = await ClientModel.findOne({
         systemName: clientHardwareInfo.systemName,
-        serialNumber: clientHardwareInfo.serialNumber,
         processorId: clientHardwareInfo.processorId,
-        computerHardwareId: clientHardwareInfo.computerHardwareId,
+        baseBoardSerial: clientHardwareInfo.baseBoardSerial,
+        hddSerial: clientHardwareInfo.hddSerial,
+        uuid: clientHardwareInfo.uuid,
+        systemSerialNumber: clientHardwareInfo.systemSerialNumber,
       })
 
       if (!findedClient) {
         await ClientModel.create({
           userId: socket.user._id,
           systemName: clientHardwareInfo.systemName,
-          serialNumber: clientHardwareInfo.serialNumber,
           processorId: clientHardwareInfo.processorId,
-          computerHardwareId: clientHardwareInfo.computerHardwareId,
+          baseBoardSerial: clientHardwareInfo.baseBoardSerial,
+          hddSerial: clientHardwareInfo.hddSerial,
+          uuid: clientHardwareInfo.uuid,
+          systemSerialNumber: clientHardwareInfo.systemSerialNumber,
           ip: socket.remoteAddress,
         }).then((client) => {
           socket.client = client

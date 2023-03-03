@@ -11,10 +11,10 @@
     "docker:start": "yarn docker:build && docker-compose -f docker-compose.yml -f docker-compose.prod.yml up",
     "docker:dev": "yarn docker:build && docker-compose -f docker-compose.yml -f docker-compose.dev.yml up",
     "docker:build": "docker-compose build",
-    "lint": "eslint .",
-    "lint:fix": "eslint --fix .",
-    "prettier": "prettier --check ./src/**/*.js",
-    "prettier:fix": "prettier --write ./src/**/*.js"
+    "lint": "eslint index.js ./src/**/*.js",
+    "lint:fix": "eslint --fix index.js ./src/**/*.js",
+    "prettier": "prettier --check index.js ./src/**/*.js",
+    "prettier:fix": "prettier --write index.js ./src/**/*.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

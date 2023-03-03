@@ -3,6 +3,7 @@ import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
 import fs from 'fs'
 import PlatformType from '../core/enums/platformType.js'
+import AppType from '../core/enums/appType.js'
 
 class Injection extends Event {
   constructor(server, socket) {
@@ -17,31 +18,50 @@ class Injection extends Event {
   }
 
   async recv(packet) {
-    const platform = packet.readUnsignedByte()
+    const appType = packet.readUnsignedByte()
 
     let defaultPointerFile = null
 
-    switch (platform) {
-      case PlatformType.USKO:
+    switch (appType) {
+      case AppType.LOADER:
         {
           try {
             defaultPointerFile = await fs.readFileSync(
-              `./data/pointers/usko.ini`
+              `./data/pointers/loader.ini`
             )
           } catch (error) {
             console.info(error)
           }
         }
         break
-
-      case PlatformType.CNKO:
+      case AppType.BOT:
         {
-          try {
-            defaultPointerFile = await fs.readFileSync(
-              `./data/pointers/cnko.ini`
-            )
-          } catch (error) {
-            console.info(error)
+          const platform = packet.readUnsignedByte()
+
+          switch (platform) {
+            case PlatformType.USKO:
+              {
+                try {
+                  defaultPointerFile = await fs.readFileSync(
+                    `./data/pointers/usko.ini`
+                  )
+                } catch (error) {
+                  console.info(error)
+                }
+              }
+              break
+
+            case PlatformType.CNKO:
+              {
+                try {
+                  defaultPointerFile = await fs.readFileSync(
+                    `./data/pointers/cnko.ini`
+                  )
+                } catch (error) {
+                  console.info(error)
+                }
+              }
+              break
           }
         }
         break

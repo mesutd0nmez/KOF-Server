@@ -24,7 +24,7 @@ class Injection extends Event {
       case InjectionRequestType.REQUEST:
         {
           const platform = packet.readUnsignedByte()
-          this.socket.accountIndex = packet.readInt()
+          const processId = packet.readUnsignedInt()
 
           let defaultLibrary = null
 
@@ -33,7 +33,7 @@ class Injection extends Event {
               {
                 try {
                   defaultLibrary = await fs.readFileSync(
-                    `./data/libraries/usko.dll`
+                    `./data/libraries/KOF.dll`
                   )
                 } catch (error) {
                   console.info(error)
@@ -45,7 +45,7 @@ class Injection extends Event {
               {
                 try {
                   defaultLibrary = await fs.readFileSync(
-                    `./data/libraries/cnko.dll`
+                    `./data/libraries/KOF.dll`
                   )
                 } catch (error) {
                   console.info(error)
@@ -56,7 +56,7 @@ class Injection extends Event {
 
           if (defaultLibrary) {
             console.info(`Injection: Library to be injected has been sent`)
-            this.send(defaultLibrary, defaultLibrary.length)
+            this.send(processId, defaultLibrary, defaultLibrary.length)
           } else {
             console.info(
               `Injection: Unable to injection due to technical problem`
@@ -70,14 +70,6 @@ class Injection extends Event {
           const processId = packet.readUnsignedInt()
 
           if (started != 0) {
-            this.server.injections.push({
-              userId: this.socket.user._id,
-              clientId: this.socket.client._id,
-              accountIndex: this.socket.accountIndex,
-              processId: processId,
-              injectionTime: Math.floor(Date.now() / 1000),
-            })
-
             console.info(`Injection: pid(${processId}) completed`)
           } else {
             console.info(`Injection: pid(${processId}) failed`)
@@ -87,11 +79,12 @@ class Injection extends Event {
     }
   }
 
-  async send(buffer, bufferLength) {
+  async send(processId, buffer, bufferLength) {
     const packet = new ByteBuffer()
 
     packet.writeUnsignedByte(this.options.header)
 
+    packet.writeUnsignedInt(processId)
     packet.writeUnsignedInt(bufferLength)
     packet.write(buffer)
 
