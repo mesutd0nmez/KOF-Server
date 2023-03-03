@@ -165,14 +165,14 @@ class Server extends EventEmitter {
                 console.info(
                   'Process packet failed, packet not starting with 0xaa55, connection destroying'
                 )
-                return socket.destroy()
+                return
               }
 
               if (data.length < 10) {
                 console.info(
                   'Process packet failed, packet size need minimum 9, connection destroying'
                 )
-                return socket.destroy()
+                return
               }
 
               const endDelimeter = data.slice(data.length - 2, data.length)
@@ -195,12 +195,12 @@ class Server extends EventEmitter {
 
               if (!startDelimeter.equals(Buffer.from([0x55, 0xaa]))) {
                 console.info('Process packet failed, StreamHeader != 0xaa55')
-                return socket.destroy()
+                return
               }
 
               if (!endDelimeter.equals(Buffer.from([0xaa, 0x55]))) {
                 console.info('Process packet failed, StreamFooter != 0x55aa')
-                return socket.destroy()
+                return
               }
 
               //Decrypt Packet

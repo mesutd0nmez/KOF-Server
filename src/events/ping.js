@@ -1,5 +1,4 @@
 import PacketHeader from '../core/enums/packetHeader.js'
-import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
 
 class Ping extends Event {

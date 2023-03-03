@@ -23,7 +23,16 @@ class Ready extends Event {
 
     this.socket.pingIntervalId = setInterval(this.socket.pingInterval, 60000)
 
-    this.send()
+    await this.send()
+
+    this.socket.generateSeed(this.socket.id + this.socket.processId)
+    this.socket.initialVector = createHash(
+      'md5',
+      createHash(
+        'sha256',
+        this.socket.seed.toString() + '.' + process.env.IV_SALT_KEY
+      )
+    )
   }
 
   async send() {
