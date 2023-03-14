@@ -44,6 +44,8 @@ class Login extends Event {
           clientHardwareInfo.hddSerial = packet.readString(true)
           clientHardwareInfo.uuid = packet.readString(true)
           clientHardwareInfo.systemSerialNumber = packet.readString(true)
+          clientHardwareInfo.partNumber = packet.readString(true)
+          clientHardwareInfo.gpu = packet.readString(true)
 
           socket.user = await UserModel.findOne({ email: email })
 
@@ -85,6 +87,8 @@ class Login extends Event {
           clientHardwareInfo.hddSerial = packet.readString(true)
           clientHardwareInfo.uuid = packet.readString(true)
           clientHardwareInfo.systemSerialNumber = packet.readString(true)
+          clientHardwareInfo.partNumber = packet.readString(true)
+          clientHardwareInfo.gpu = packet.readString(true)
 
           const decoded = jwt.verify(token, process.env.TOKEN_KEY)
           socket.user = await UserModel.findOne({ _id: decoded.userId })
@@ -110,6 +114,8 @@ class Login extends Event {
         hddSerial: clientHardwareInfo.hddSerial,
         uuid: clientHardwareInfo.uuid,
         systemSerialNumber: clientHardwareInfo.systemSerialNumber,
+        partNumber: clientHardwareInfo.partNumber,
+        gpu: clientHardwareInfo.gpu,
       })
 
       if (!findedClient) {
@@ -121,6 +127,8 @@ class Login extends Event {
           hddSerial: clientHardwareInfo.hddSerial,
           uuid: clientHardwareInfo.uuid,
           systemSerialNumber: clientHardwareInfo.systemSerialNumber,
+          partNumber: clientHardwareInfo.partNumber,
+          gpu: clientHardwareInfo.gpu,
           ip: socket.remoteAddress,
         }).then((client) => {
           socket.client = client

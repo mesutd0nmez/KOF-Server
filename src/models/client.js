@@ -21,6 +21,12 @@ const clientSchema = mongoose.Schema(
     systemSerialNumber: {
       type: String,
     },
+    partNumber: {
+      type: String,
+    },
+    gpu: {
+      type: String,
+    },
     ip: {
       type: String,
     },
