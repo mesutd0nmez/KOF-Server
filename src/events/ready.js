@@ -21,7 +21,7 @@ class Ready extends Event {
     this.socket.connectionReadyTime = Date.now()
     this.socket.ready = true
 
-    this.socket.pingIntervalId = setInterval(this.socket.pingInterval, 60000)
+    this.socket.pingIntervalId = setInterval(this.socket.pingInterval, 30000)
 
     await this.send()
 
@@ -33,6 +33,8 @@ class Ready extends Event {
         this.socket.seed.toString() + '.' + process.env.IV_SALT_KEY
       )
     )
+
+    console.info(`Socket: Ready`)
   }
 
   async send() {
