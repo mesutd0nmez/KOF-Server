@@ -1,7 +1,7 @@
-FROM node:slim
+FROM node:alpine
 
-RUN apt-get update
-RUN apt-get install git -y
+RUN apk update
+RUN apk add --no-cache git
 
 WORKDIR /usr/src/app/kof-server
 
