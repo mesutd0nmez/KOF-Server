@@ -193,7 +193,7 @@ class Login extends Event {
     packet.writeUnsignedByte(status)
 
     if(status == 1) {
-      packet.writeUnsignedByte(this.socket.user.type)
+      packet.writeUnsignedInt(this.socket.user.type)
     }
 
     if (token != '') {
