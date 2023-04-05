@@ -39,7 +39,7 @@ class Login extends Event {
             if (email === 'me@kofbot.com') return
           }
 
-          if (validator.isEmail(email)) {
+          if (!validator.isEmail(email)) {
             console.info(`Login: ${email} - is not valid email`)
             return
           }
