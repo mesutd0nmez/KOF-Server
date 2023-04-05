@@ -6,6 +6,7 @@ import UserModel from '../models/user.js'
 import ClientModel from '../models/client.js'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
+import validator from 'validator'
 
 class Login extends Event {
   constructor(server, socket) {
@@ -36,6 +37,11 @@ class Login extends Event {
 
           if (process.env.NODE_ENV !== 'development') {
             if (email === 'me@kofbot.com') return
+          }
+
+          if (validator.isEmail(email)) {
+            console.info(`Login: ${email} - is not valid email`)
+            return
           }
 
           clientHardwareInfo.systemName = packet.readString(true)
@@ -192,7 +198,7 @@ class Login extends Event {
     packet.writeUnsignedByte(type)
     packet.writeUnsignedByte(status)
 
-    if(status == 1) {
+    if (status == 1) {
       packet.writeUnsignedInt(this.socket.user.type)
     }
 
