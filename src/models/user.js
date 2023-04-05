@@ -6,8 +6,7 @@ const userSchema = mongoose.Schema(
     password: { type: String, required: true },
     type: {
       type: Number,
-      enum: [0, 1, 255],
-      default: 0,
+      default: 1,
     },
   },
   {

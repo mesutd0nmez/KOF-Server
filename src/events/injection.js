@@ -29,23 +29,12 @@ class Injection extends Event {
           let defaultLibrary = null
 
           switch (platform) {
+            case PlatformType.CNKO:
             case PlatformType.USKO:
               {
                 try {
                   defaultLibrary = await fs.readFileSync(
-                    `./data/libraries/KOF.dll`
-                  )
-                } catch (error) {
-                  console.info(error)
-                }
-              }
-              break
-
-            case PlatformType.CNKO:
-              {
-                try {
-                  defaultLibrary = await fs.readFileSync(
-                    `./data/libraries/KOF.dll`
+                    `./data/libraries/Pipeline.dll`
                   )
                 } catch (error) {
                   console.info(error)
