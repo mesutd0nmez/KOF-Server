@@ -254,7 +254,7 @@ class Server extends EventEmitter {
               const encryptionPacket = new ByteBuffer()
 
               //Packet
-              if (compress) {
+              if (compress && data.length > 256) {
                 encryptionPacket.writeUnsignedByte(1) //compression flag
                 encryptionPacket.writeUnsignedInt(data.length) //raw packet size
 
