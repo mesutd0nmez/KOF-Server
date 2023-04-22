@@ -13,10 +13,9 @@ class Event {
       const decoded = jwt.verify(this.socket.token, process.env.TOKEN_KEY)
       this.options.userId = decoded.userId
     } catch (err) {
-      console.info(`Middleware: Invalid token, connection destroying`)
-      this.socket.destroy()
       return false
     }
+
     return true
   }
 
@@ -32,16 +31,23 @@ class Event {
   }
 
   async handleRecv(packet) {
-    this.rateLimiter
-      .consume(this.socket.remoteAddress, 1)
-      .then(() => {
-        if (this.middleWareRecv()) {
-          this.recv(packet)
-        }
-      })
-      .catch(() => {
-        console.info(`Request rate limited`)
-      })
+    try {
+      this.rateLimiter
+        .consume(this.socket.remoteAddress, 1)
+        .then(() => {
+          if (this.middleWareRecv()) {
+            this.recv(packet)
+          } else {
+            console.info(`Middleware: Invalid token, connection destroying`)
+            this.socket.destroy()
+          }
+        })
+        .catch(() => {
+          console.info(`Request rate limited`)
+        })
+    } catch (err) {
+      console.info(err)
+    }
   }
 
   async middleWareSend() {
@@ -49,8 +55,12 @@ class Event {
   }
 
   async handleSend(...args) {
-    if (this.middleWareSend()) {
-      this.send(...args)
+    try {
+      if (this.middleWareSend()) {
+        this.send(...args)
+      }
+    } catch (err) {
+      console.info(err)
     }
   }
 }
