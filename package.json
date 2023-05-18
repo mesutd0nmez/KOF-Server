@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "start": "pm2 start ecosystem.config.json --no-daemon",
-    "dev": "cross-env NODE_ENV=development node -r dotenv/config ./index.js",
+    "dev": "cross-env NODE_ENV=development node -r dotenv/config ./index.js ./src/bin/www",
     "docker:start": "yarn docker:build && docker-compose -f docker-compose.yml -f docker-compose.prod.yml up",
     "docker:dev": "yarn docker:build && docker-compose -f docker-compose.yml -f docker-compose.dev.yml up",
     "docker:build": "docker-compose build",
@@ -19,6 +19,7 @@
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "byte-buffer": "https://github.com/trkyshorty/byte-buffer#build",
+    "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^16.0.3",
     "events": "^3.3.0",
@@ -27,11 +28,16 @@
     "glob": "^8.1.0",
     "iconv-lite": "^0.6.3",
     "jsonwebtoken": "^9.0.0",
-    "mongoose": "^6.9.1",
+    "moment": "^2.29.4",
+    "mongoose": "^7.1.0",
+    "mongoose-sequence": "^5.3.1",
+    "morgan": "^1.10.0",
     "net": "^1.0.2",
     "path": "^0.12.7",
     "rate-limiter-flexible": "^2.4.1",
+    "shopier-api": "^1.0.1",
     "snappy": "^7.2.2",
+    "undici": "^5.22.0",
     "validator": "^13.9.0"
   },
   "devDependencies": {

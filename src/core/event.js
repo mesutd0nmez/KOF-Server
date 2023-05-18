@@ -11,7 +11,7 @@ class Event {
   async validateToken() {
     try {
       const decoded = jwt.verify(this.socket.token, process.env.TOKEN_KEY)
-      this.options.userId = decoded.userId
+      this.options.userId = decoded.id
     } catch (err) {
       return false
     }
