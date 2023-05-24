@@ -97,7 +97,7 @@ class Login extends Event {
           clientHardwareInfo.gpu = packet.readString(true)
 
           const decoded = jwt.verify(token, process.env.TOKEN_KEY)
-          socket.user = await UserModel.findOne({ _id: decoded.id })
+          socket.user = await UserModel.findOne({ _id: decoded.userId })
 
           if (!socket.user) {
             console.info(`Login: There is no user with this token`)
@@ -126,7 +126,7 @@ class Login extends Event {
 
       if (!findedClient) {
         await ClientModel.create({
-          user: socket.user._id,
+          userId: socket.user._id,
           systemName: clientHardwareInfo.systemName,
           processorId: clientHardwareInfo.processorId,
           baseBoardSerial: clientHardwareInfo.baseBoardSerial,
@@ -143,9 +143,9 @@ class Login extends Event {
           )
         })
       } else {
-        if (!socket.user._id.equals(findedClient.user)) {
+        if (!socket.user._id.equals(findedClient.userId)) {
           console.info(
-            `Login: ${socket.user.email} - client ${findedClient._id} registered another user (${findedClient.user} != ${socket.user._id}), socket destroying`
+            `Login: ${socket.user.email} - client ${findedClient._id} registered another user (${findedClient.userId} != ${socket.user._id}), socket destroying`
           )
 
           return socket.destroy()
@@ -166,7 +166,7 @@ class Login extends Event {
         case LoginType.GENERIC: {
           console.info(`Login: ${socket.user.email} - signing session token`)
 
-          token = jwt.sign({ id: socket.user._id }, process.env.TOKEN_KEY, {
+          token = jwt.sign({ userId: socket.user._id }, process.env.TOKEN_KEY, {
             expiresIn: '365d',
           })
 

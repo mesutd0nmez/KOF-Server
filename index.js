@@ -5,13 +5,12 @@ mongoose.set('strictQuery', false)
 
 mongoose
   .connect(process.env.MONGODB_URL)
-  .then(async () => {
+  .then(() => {
     const server = new Server({
       port: process.env.PORT,
     })
 
-    await server.createServer()
-    await server.createWebServer()
+    server.createServer()
   })
   .catch((error) => {
     console.info(error)

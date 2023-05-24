@@ -9,17 +9,6 @@ import { createHash, encrypt, decrypt } from './utils/cryption.js'
 import { clearTimeout } from 'timers'
 import { RateLimiterMemory } from 'rate-limiter-flexible'
 import express from 'express'
-import logger from 'morgan'
-import cors from 'cors'
-import authRouter from './routes/auth/index.js'
-import userRouter from './routes/user/index.js'
-import paymentRouter from './routes/payment/index.js'
-import productRouter from './routes/product/index.js'
-import orderRouter from './routes/order/index.js'
-import clientRouter from './routes/client/index.js'
-
-import userMiddleware from './middleware/user.js'
-//import adminMiddleware from './middleware/admin.js'
 
 class Server extends EventEmitter {
   constructor(options) {
@@ -40,6 +29,8 @@ class Server extends EventEmitter {
       points: 5,
       duration: 1,
     }
+
+    this.express = express()
 
     this.connectionRateLimiter = new RateLimiterMemory(
       this.connectionRateLimitOpts
@@ -140,33 +131,6 @@ class Server extends EventEmitter {
     }
 
     socket.waitingReadyTimeoutId = setTimeout(socket.waitingReadyTimeout, 15000)
-  }
-
-  async createWebServer() {
-    this.express = express()
-
-    this.express.use(
-      logger(process.env.NODE_ENV === 'development' ? 'dev' : 'combined')
-    )
-
-    this.express.use(cors())
-    this.express.use(express.json())
-    this.express.use(express.urlencoded({ extended: false }))
-    this.express.use(express.static(path.resolve('./public')))
-
-    this.express.set('trust proxy', true)
-
-    //Routes
-    this.express.use('/auth', authRouter)
-    this.express.use('/user', userMiddleware, userRouter)
-    this.express.use('/payment', paymentRouter)
-    this.express.use('/client', userMiddleware, clientRouter)
-    this.express.use('/order', userMiddleware, orderRouter)
-    this.express.use('/product', productRouter)
-
-    this.express.listen(process.env.WEB_PORT, () => {
-      console.log(`Web: Running on port - ${process.env.WEB_PORT}`)
-    })
   }
 
   async createServer() {

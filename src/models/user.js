@@ -2,23 +2,11 @@ import mongoose from 'mongoose'
 
 const userSchema = mongoose.Schema(
   {
-    discordId: { type: String },
-    username: { type: String },
-    email: { type: String },
-    avatar: { type: String },
-    accessToken: { type: String },
-    expiresIn: { type: Number },
-    refreshToken: { type: String },
-    scope: { type: String },
-    tokenType: { type: String },
-    package: {
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    type: {
       type: Number,
       default: 1,
-    },
-    isAdmin: {
-      type: Number,
-      enum: [0, 1],
-      default: 0,
     },
   },
   {

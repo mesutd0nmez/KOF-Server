@@ -28,7 +28,7 @@ class Configuration extends Event {
             case ConfigurationRequestType.LOAD:
               {
                 let configurationCollection = await ConfigurationModel.findOne({
-                  user: this.options.userId,
+                  userId: this.options.userId,
                   appType: appType,
                   platform: 0,
                   server: 0,
@@ -37,7 +37,7 @@ class Configuration extends Event {
 
                 if (!configurationCollection) {
                   await ConfigurationModel.create({
-                    user: this.options.userId,
+                    userId: this.options.userId,
                     appType: appType,
                     platform: 0,
                     server: 0,
@@ -62,7 +62,7 @@ class Configuration extends Event {
 
                 await ConfigurationModel.updateOne(
                   {
-                    user: this.options.userId,
+                    userId: this.options.userId,
                     appType: appType,
                     platform: 0,
                     server: 0,
@@ -88,7 +88,7 @@ class Configuration extends Event {
                 const characterName = packet.readString(true)
 
                 let configurationCollection = await ConfigurationModel.findOne({
-                  user: this.options.userId,
+                  userId: this.options.userId,
                   appType: appType,
                   platform: platform,
                   server: serverIndex,
@@ -97,7 +97,7 @@ class Configuration extends Event {
 
                 if (!configurationCollection) {
                   await ConfigurationModel.create({
-                    user: this.options.userId,
+                    userId: this.options.userId,
                     appType: appType,
                     platform: platform,
                     server: serverIndex,
@@ -125,7 +125,7 @@ class Configuration extends Event {
 
                 await ConfigurationModel.updateOne(
                   {
-                    user: this.options.userId,
+                    userId: this.options.userId,
                     appType: appType,
                     platform: platform,
                     server: serverIndex,

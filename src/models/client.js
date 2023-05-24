@@ -2,7 +2,7 @@ import mongoose from 'mongoose'
 
 const clientSchema = mongoose.Schema(
   {
-    user: { type: mongoose.Types.ObjectId, ref: 'User' },
+    userId: { type: mongoose.Types.ObjectId, ref: 'User' },
     systemName: {
       type: String,
     },

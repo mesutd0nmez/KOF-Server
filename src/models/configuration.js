@@ -2,7 +2,7 @@ import mongoose from 'mongoose'
 
 const configurationSchema = mongoose.Schema(
   {
-    user: { type: mongoose.Types.ObjectId, ref: 'User' },
+    userId: { type: mongoose.Types.ObjectId, ref: 'User' },
     appType: {
       type: Number,
       enum: [0, 1, 2],
