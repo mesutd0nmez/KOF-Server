@@ -8,8 +8,6 @@ import Snappy from 'snappy'
 import { createHash, encrypt, decrypt } from './utils/cryption.js'
 import { clearTimeout } from 'timers'
 import { RateLimiterMemory } from 'rate-limiter-flexible'
-import express from 'express'
-
 class Server extends EventEmitter {
   constructor(options) {
     super()
@@ -29,8 +27,6 @@ class Server extends EventEmitter {
       points: 5,
       duration: 1,
     }
-
-    this.express = express()
 
     this.connectionRateLimiter = new RateLimiterMemory(
       this.connectionRateLimitOpts
