@@ -4,7 +4,6 @@ const PacketHeader = {
   CONFIGURATION: 2,
   POINTER: 3,
   INJECTION: 4,
-  PING: 5,
 }
 
 export default PacketHeader
