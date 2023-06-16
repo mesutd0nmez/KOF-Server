@@ -76,9 +76,6 @@ class Server extends EventEmitter {
 
     socket.responseTime = 0
 
-    socket.pingIntervalId = 0
-    socket.pingRequested = false
-
     socket.waitingReadyTimeoutId = 0
 
     socket.generateSeed = (a) => {
@@ -86,10 +83,6 @@ class Server extends EventEmitter {
       t = Math.imul(t ^ (t >>> 15), t | 1)
       t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
       socket.seed = (t ^ (t >>> 14)) >>> 0
-    }
-
-    socket.pingInterval = () => {
-      socket.send.emit(PacketHeader.PING)
     }
 
     socket.generateSeed(((1881 * 1923) / 1993) << 16)
@@ -301,7 +294,6 @@ class Server extends EventEmitter {
               if (index !== -1) sockets.splice(index, 1)
 
               clearTimeout(socket.waitingReadyTimeoutId)
-              clearInterval(socket.pingIntervalId)
               socket.removeAllListeners()
               socket.recv.removeAllListeners()
               socket.send.removeAllListeners()

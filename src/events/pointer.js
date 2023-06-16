@@ -62,6 +62,18 @@ class Injection extends Event {
                 }
               }
               break
+
+            case PlatformType.KOKO:
+              {
+                try {
+                  defaultPointerFile = await fs.readFileSync(
+                    `./data/pointers/koko.ini`
+                  )
+                } catch (error) {
+                  console.info(error)
+                }
+              }
+              break
           }
         }
         break
