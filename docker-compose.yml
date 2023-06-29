@@ -34,4 +34,4 @@ networks:
   app:
     driver: bridge
   database:
-    driver: ipvlan
+    driver: bridge
