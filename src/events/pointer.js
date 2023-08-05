@@ -74,6 +74,18 @@ class Injection extends Event {
                 }
               }
               break
+
+            case PlatformType.STKO:
+              {
+                try {
+                  defaultPointerFile = await fs.readFileSync(
+                    `./data/pointers/stko.ini`
+                  )
+                } catch (error) {
+                  console.info(error)
+                }
+              }
+              break
           }
         }
         break
