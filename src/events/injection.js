@@ -31,6 +31,8 @@ class Injection extends Event {
           switch (platform) {
             case PlatformType.CNKO:
             case PlatformType.USKO:
+            case PlatformType.KOKO:
+            case PlatformType.STKO:
               {
                 try {
                   defaultLibrary = await fs.readFileSync(
