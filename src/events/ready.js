@@ -21,8 +21,6 @@ class Ready extends Event {
     this.socket.connectionReadyTime = Date.now()
     this.socket.ready = true
 
-    this.socket.pingIntervalId = setInterval(this.socket.pingInterval, 30000)
-
     await this.send()
 
     this.socket.generateSeed(this.socket.id + this.socket.processId)
