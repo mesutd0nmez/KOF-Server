@@ -13,3 +13,7 @@ RUN yarn global add pm2
 RUN yarn install
 
 COPY . .
+
+EXPOSE 8888
+
+CMD ["yarn", "start"]
