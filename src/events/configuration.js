@@ -11,7 +11,7 @@ class Configuration extends Event {
       header: PacketHeader.CONFIGURATION,
       authorization: true,
       rateLimitOpts: {
-        points: 5,
+        points: 1000,
         duration: 1, // Per second
       },
     })
@@ -91,7 +91,7 @@ class Configuration extends Event {
                   userId: this.options.userId,
                   appType: appType,
                   platform: platform,
-                  server: serverIndex,
+                  server: serverIndex + 1,
                   name: characterName,
                 })
 
@@ -100,7 +100,7 @@ class Configuration extends Event {
                     userId: this.options.userId,
                     appType: appType,
                     platform: platform,
-                    server: serverIndex,
+                    server: serverIndex + 1,
                     name: characterName,
                     configuration: null,
                   }).then((createdConfiguration) => {
@@ -128,7 +128,7 @@ class Configuration extends Event {
                     userId: this.options.userId,
                     appType: appType,
                     platform: platform,
-                    server: serverIndex,
+                    server: serverIndex + 1,
                     name: characterName,
                   },
                   { configuration: configurationData },
@@ -155,7 +155,7 @@ class Configuration extends Event {
       packet.writeString(configuration, true)
     }
 
-    this.socket.emit('send', packet.raw, true)
+    this.socket.emit('send', packet.raw)
   }
 }
 

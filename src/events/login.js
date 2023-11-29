@@ -14,7 +14,7 @@ class Login extends Event {
       header: PacketHeader.LOGIN,
       authorization: false,
       rateLimitOpts: {
-        points: 5,
+        points: 1000,
         duration: 1, // Per second
       },
     })
@@ -68,9 +68,14 @@ class Login extends Event {
 
               const hashedPassword = await bcrypt.hash(password, 10)
 
+              const today = new Date()
+              const futureDate = new Date()
+              futureDate.setDate(today.getDate() + 3)
+
               await UserModel.create({
                 email: email,
                 password: hashedPassword,
+                subscriptionEndAt: futureDate,
               }).then((createdUser) => {
                 socket.user = createdUser
                 console.info(`Login: ${createdUser.email} - created`)
@@ -113,6 +118,17 @@ class Login extends Event {
     if (socket.user) {
       console.info(`Login: ${socket.user.email} - logging in`)
 
+      const today = new Date()
+      const subscriptionEndAt = new Date(socket.user.subscriptionEndAt)
+
+      if (today > subscriptionEndAt) {
+        console.info(
+          `Login: ${socket.user.email} - Account has subscription time end`
+        )
+
+        return socket.destroy()
+      }
+
       const findedClient = await ClientModel.findOne({
         systemName: clientHardwareInfo.systemName,
         processorId: clientHardwareInfo.processorId,
@@ -125,6 +141,14 @@ class Login extends Event {
       })
 
       if (!findedClient) {
+        if (socket.user.credit == 0) {
+          console.info(
+            `Login: ${socket.user.email} - Account has no credit limit for create new client`
+          )
+
+          return socket.destroy()
+        }
+
         await ClientModel.create({
           userId: socket.user._id,
           systemName: clientHardwareInfo.systemName,
@@ -138,6 +162,12 @@ class Login extends Event {
           ip: socket.remoteAddress,
         }).then((client) => {
           socket.client = client
+
+          if (socket.user.credit != -1) {
+            socket.user.credit--
+            socket.user.save()
+          }
+
           console.info(
             `Login: ${socket.user.email} - client ${client._id} created`
           )

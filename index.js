@@ -11,6 +11,7 @@ mongoose
     })
 
     server.createServer()
+    server.createWebServer()
   })
   .catch((error) => {
     console.info(error)

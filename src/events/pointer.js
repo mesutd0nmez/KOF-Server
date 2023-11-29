@@ -11,7 +11,7 @@ class Injection extends Event {
       header: PacketHeader.POINTER,
       authorization: true,
       rateLimitOpts: {
-        points: 5,
+        points: 1000,
         duration: 1, // Per second
       },
     })
@@ -107,7 +107,7 @@ class Injection extends Event {
     packet.writeUnsignedInt(bufferLength)
     packet.write(buffer)
 
-    this.socket.emit('send', packet.raw, true)
+    this.socket.emit('send', packet.raw)
   }
 }
 

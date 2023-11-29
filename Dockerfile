@@ -3,6 +3,9 @@ FROM node:alpine
 RUN apk update
 RUN apk add --no-cache git
 
+RUN apk add --update python3 make g++\
+   && rm -rf /var/cache/apk/*
+
 WORKDIR /usr/src/app/kof-server
 
 COPY package.json ./

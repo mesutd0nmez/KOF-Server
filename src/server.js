@@ -1,13 +1,22 @@
 import net from 'net'
-import glob from 'glob'
+import { glob } from 'glob'
 import path from 'path'
 import EventEmitter from 'events'
 import { ByteBuffer } from './utils/byteBuffer.js'
 import PacketHeader from './core/enums/packetHeader.js'
-import Snappy from 'snappy'
 import { createHash, encrypt, decrypt } from './utils/cryption.js'
 import { clearTimeout } from 'timers'
 import { RateLimiterMemory } from 'rate-limiter-flexible'
+import express from 'express'
+import logger from 'morgan'
+import cors from 'cors'
+import lzf from 'lzf'
+
+import adminMiddleware from './middleware/admin.js'
+import authLoginRouter from './routes/auth/login.js'
+import adminPointerRouter from './routes/admin/pointer.js'
+import adminUserRouter from './routes/admin/user.js'
+
 class Server extends EventEmitter {
   constructor(options) {
     super()
@@ -48,9 +57,6 @@ class Server extends EventEmitter {
   }
 
   async initializeSocket(socket) {
-    socket.setKeepAlive(true)
-    socket.setNoDelay(true)
-
     console.log(`Socket: ${socket.remoteAddress}:${socket.remotePort}`)
 
     if (this.socketIdCounter == 65535) {
@@ -76,8 +82,6 @@ class Server extends EventEmitter {
 
     socket.responseTime = 0
 
-    socket.waitingReadyTimeoutId = 0
-
     socket.generateSeed = (a) => {
       var t = (a += 0x6d2b79f5)
       t = Math.imul(t ^ (t >>> 15), t | 1)
@@ -85,7 +89,7 @@ class Server extends EventEmitter {
       socket.seed = (t ^ (t >>> 14)) >>> 0
     }
 
-    socket.generateSeed(((1881 * 1923) / 1993) << 16)
+    socket.generateSeed(((1881 * 2023) / 2009) << 16)
     socket.initialVector = createHash(
       'md5',
       createHash(
@@ -110,6 +114,7 @@ class Server extends EventEmitter {
       })
     })
 
+    socket.waitingReadyTimeoutId = 0
     socket.waitingReadyTimeout = () => {
       if (socket.connectionReadyTime == 0) {
         console.info(
@@ -120,6 +125,13 @@ class Server extends EventEmitter {
     }
 
     socket.waitingReadyTimeoutId = setTimeout(socket.waitingReadyTimeout, 15000)
+
+    socket.pingIntervalId = 0
+    socket.pingInterval = () => {
+      socket.send.emit(PacketHeader.PING)
+    }
+
+    socket.pingIntervalId = setInterval(socket.pingInterval, 30000)
   }
 
   async createServer() {
@@ -130,7 +142,10 @@ class Server extends EventEmitter {
 
     await this.buildEvents()
 
-    this.server = net.createServer()
+    this.server = net.createServer((socket) => {
+      //socket.setKeepAlive(true, 1800000)
+      //socket.setNoDelay(true)
+    })
 
     this.server.listen(this.options.port, () => {
       console.log(`Server: Running on port - ${this.options.port}`)
@@ -212,16 +227,10 @@ class Server extends EventEmitter {
               decryptedPacket.readUnsignedInt()
 
               if (flag) {
-                //Compressed packet size
-                decryptedPacket.readUnsignedInt()
-
                 const packetCommpressed = decryptedPacket.read()
+                const uncompressedPacket = lzf.decompress(packetCommpressed.raw)
 
-                let uncompressedPacket = await Snappy.uncompress(
-                  packetCommpressed.raw
-                )
-
-                decryptedPacket = new ByteBuffer(uncompressedPacket)
+                decryptedPacket = new ByteBuffer(Array.from(uncompressedPacket))
               }
 
               const packetHeader = decryptedPacket.readByte()
@@ -247,11 +256,11 @@ class Server extends EventEmitter {
               const encryptionPacket = new ByteBuffer()
 
               //Packet
-              if (compress && data.length > 256) {
+              if (compress && data.length > 500) {
                 encryptionPacket.writeUnsignedByte(1) //compression flag
                 encryptionPacket.writeUnsignedInt(data.length) //raw packet size
 
-                const compressedData = await Snappy.compress(data)
+                var compressedData = lzf.compress(data)
 
                 encryptionPacket.writeUnsignedInt(compressedData.length) //compressed packet size
                 encryptionPacket.write(compressedData) //compressed data
@@ -294,6 +303,7 @@ class Server extends EventEmitter {
               if (index !== -1) sockets.splice(index, 1)
 
               clearTimeout(socket.waitingReadyTimeoutId)
+              clearTimeout(socket.pingIntervalId)
               socket.removeAllListeners()
               socket.recv.removeAllListeners()
               socket.send.removeAllListeners()
@@ -319,6 +329,34 @@ class Server extends EventEmitter {
           console.info(`Connection rate limited, socket destroying`)
           socket.destroy()
         })
+    })
+  }
+
+  async createWebServer() {
+    this.express = express()
+
+    this.express.use(
+      logger(process.env.NODE_ENV === 'development' ? 'dev' : 'combined')
+    )
+
+    this.express.use(cors())
+    this.express.use(express.json())
+    this.express.use(express.urlencoded({ extended: false }))
+    this.express.use(express.static(path.resolve('./public')))
+
+    this.express.set('trust proxy', true)
+
+    //Routes
+    this.express.use('/auth/login', authLoginRouter)
+    this.express.use('/admin/pointer', adminMiddleware, adminPointerRouter)
+    this.express.use('/admin/user', adminMiddleware, adminUserRouter)
+    //this.express.use('/payment', paymentRouter)
+    //this.express.use('/client', userMiddleware, clientRouter)
+    //this.express.use('/order', userMiddleware, orderRouter)
+    //this.express.use('/product', productRouter)
+
+    this.express.listen(process.env.WEB_PORT, () => {
+      console.log(`Web: Running on port - ${process.env.WEB_PORT}`)
     })
   }
 }

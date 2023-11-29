@@ -14,8 +14,8 @@ const configurationSchema = mongoose.Schema(
       default: 0,
     },
     server: {
-      type: String,
-      default: null,
+      type: Number,
+      default: 0,
     },
     name: {
       type: String,

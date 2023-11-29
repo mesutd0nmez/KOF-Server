@@ -4,10 +4,9 @@ const userSchema = mongoose.Schema(
   {
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    type: {
-      type: Number,
-      default: 1,
-    },
+    credit: { type: Number, default: 1 },
+    subscriptionEndAt: { type: Date, required: true },
+    admin: { type: Number, default: 0 },
   },
   {
     versionKey: false,

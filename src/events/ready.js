@@ -9,7 +9,7 @@ class Ready extends Event {
       header: PacketHeader.READY,
       authorization: false,
       rateLimitOpts: {
-        points: 5,
+        points: 1000,
         duration: 1, // Per second
       },
     })
