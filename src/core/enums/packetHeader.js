@@ -6,6 +6,7 @@ const PacketHeader = {
   INJECTION: 4,
   PING: 5,
   CAPTCHA: 6,
+  UPDATE: 7,
 }
 
 export default PacketHeader

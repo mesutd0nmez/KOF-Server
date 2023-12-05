@@ -6,22 +6,10 @@ const clientSchema = mongoose.Schema(
     systemName: {
       type: String,
     },
-    processorId: {
-      type: String,
-    },
-    baseBoardSerial: {
-      type: String,
-    },
-    hddSerial: {
-      type: String,
-    },
     uuid: {
       type: String,
     },
     systemSerialNumber: {
-      type: String,
-    },
-    partNumber: {
       type: String,
     },
     gpu: {

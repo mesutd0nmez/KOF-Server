@@ -2,6 +2,7 @@ import PacketHeader from '../core/enums/packetHeader.js'
 import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
 import { createHash } from '../utils/cryption.js'
+import SessionModel from '../models/session.js'
 
 class Ready extends Event {
   constructor(server, socket) {
@@ -17,9 +18,21 @@ class Ready extends Event {
 
   async recv(packet) {
     this.socket.processId = packet.readUnsignedInt()
+    this.socket.fileCRC = packet.readUnsignedInt()
 
     this.socket.connectionReadyTime = Date.now()
     this.socket.ready = true
+
+    this.socket.data = await SessionModel.findOneAndUpdate(
+      { _id: this.socket.data.id },
+      {
+        $set: {
+          processId: this.socket.processId,
+          fileCRC: this.socket.fileCRC,
+        },
+      },
+      { new: true }
+    )
 
     await this.send()
 

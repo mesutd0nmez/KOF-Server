@@ -7,6 +7,8 @@ import ClientModel from '../models/client.js'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import validator from 'validator'
+import SessionModel from '../models/session.js'
+import VersionModel from '../models/version.js'
 
 class Login extends Event {
   constructor(server, socket) {
@@ -26,6 +28,7 @@ class Login extends Event {
     let token = null
     let clientHardwareInfo = {}
     let socket = this.socket
+    let statusMessage = 'Bilinmeyen Hata'
 
     switch (type) {
       case LoginType.GENERIC:
@@ -45,12 +48,8 @@ class Login extends Event {
           }
 
           clientHardwareInfo.systemName = packet.readString(true)
-          clientHardwareInfo.processorId = packet.readString(true)
-          clientHardwareInfo.baseBoardSerial = packet.readString(true)
-          clientHardwareInfo.hddSerial = packet.readString(true)
           clientHardwareInfo.uuid = packet.readString(true)
           clientHardwareInfo.systemSerialNumber = packet.readString(true)
-          clientHardwareInfo.partNumber = packet.readString(true)
           clientHardwareInfo.gpu = packet.readString(true)
 
           socket.user = await UserModel.findOne({ email: email })
@@ -59,6 +58,7 @@ class Login extends Event {
             if (!(await bcrypt.compare(password, socket.user.password))) {
               socket.user = null
               console.info(`Login: ${email} - password does not match`)
+              statusMessage = 'Aktivasyon bilgileri hatali'
             }
           } else {
             if (process.env.AUTO_REGISTRATION == 1) {
@@ -82,6 +82,7 @@ class Login extends Event {
               })
             } else {
               console.info(`Login: ${email} - not found`)
+              statusMessage = 'Aktivasyon basarisiz'
             }
           }
         }
@@ -93,12 +94,8 @@ class Login extends Event {
           if (!token) return
 
           clientHardwareInfo.systemName = packet.readString(true)
-          clientHardwareInfo.processorId = packet.readString(true)
-          clientHardwareInfo.baseBoardSerial = packet.readString(true)
-          clientHardwareInfo.hddSerial = packet.readString(true)
           clientHardwareInfo.uuid = packet.readString(true)
           clientHardwareInfo.systemSerialNumber = packet.readString(true)
-          clientHardwareInfo.partNumber = packet.readString(true)
           clientHardwareInfo.gpu = packet.readString(true)
 
           const decoded = jwt.verify(token, process.env.TOKEN_KEY)
@@ -106,17 +103,22 @@ class Login extends Event {
 
           if (!socket.user) {
             console.info(`Login: There is no user with this token`)
+            statusMessage = 'Aktivasyon basarisiz'
           }
         } catch (err) {
           console.info(err)
           socket.user = null
           console.info(`Login: Invalid token`)
+          statusMessage = 'Aktivasyon basarisiz'
         }
         break
     }
 
     if (socket.user) {
       console.info(`Login: ${socket.user.email} - logging in`)
+
+      socket.user.updatedAt = Date.now()
+      socket.user.save()
 
       const today = new Date()
       const subscriptionEndAt = new Date(socket.user.subscriptionEndAt)
@@ -126,17 +128,17 @@ class Login extends Event {
           `Login: ${socket.user.email} - Account has subscription time end`
         )
 
-        return socket.destroy()
+        return this.send({
+          type: type,
+          status: 0,
+          message: 'Abonelik sureniz doldu',
+        })
       }
 
-      const findedClient = await ClientModel.findOne({
+      let findedClient = await ClientModel.findOne({
         systemName: clientHardwareInfo.systemName,
-        processorId: clientHardwareInfo.processorId,
-        baseBoardSerial: clientHardwareInfo.baseBoardSerial,
-        hddSerial: clientHardwareInfo.hddSerial,
         uuid: clientHardwareInfo.uuid,
         systemSerialNumber: clientHardwareInfo.systemSerialNumber,
-        partNumber: clientHardwareInfo.partNumber,
         gpu: clientHardwareInfo.gpu,
       })
 
@@ -146,22 +148,25 @@ class Login extends Event {
             `Login: ${socket.user.email} - Account has no credit limit for create new client`
           )
 
-          return socket.destroy()
+          return this.send({
+            type: type,
+            status: 0,
+            message: 'Aktivasyon icin yeterli kredi yok',
+          })
         }
 
         await ClientModel.create({
           userId: socket.user._id,
           systemName: clientHardwareInfo.systemName,
-          processorId: clientHardwareInfo.processorId,
-          baseBoardSerial: clientHardwareInfo.baseBoardSerial,
-          hddSerial: clientHardwareInfo.hddSerial,
           uuid: clientHardwareInfo.uuid,
           systemSerialNumber: clientHardwareInfo.systemSerialNumber,
-          partNumber: clientHardwareInfo.partNumber,
           gpu: clientHardwareInfo.gpu,
           ip: socket.remoteAddress,
-        }).then((client) => {
+        }).then(async (client) => {
           socket.client = client
+
+          socket.data.clientId = socket.client.id
+          await socket.data.save()
 
           if (socket.user.credit != -1) {
             socket.user.credit--
@@ -173,15 +178,20 @@ class Login extends Event {
           )
         })
       } else {
-        if (!socket.user._id.equals(findedClient.userId)) {
+        if (!socket.user._id.equals(socket.user.id)) {
           console.info(
             `Login: ${socket.user.email} - client ${findedClient._id} registered another user (${findedClient.userId} != ${socket.user._id}), socket destroying`
           )
 
-          return socket.destroy()
+          return this.send({
+            type: type,
+            status: 0,
+            message: 'Daha once aktivasyon yapildi',
+          })
         }
 
         findedClient.ip = socket.remoteAddress
+        findedClient.updatedAt = Date.now()
 
         await findedClient.save()
 
@@ -191,6 +201,17 @@ class Login extends Event {
           `Login: ${socket.user.email} - client ${socket.client._id}`
         )
       }
+
+      this.socket.data = await SessionModel.findOneAndUpdate(
+        { _id: this.socket.data.id },
+        {
+          $set: {
+            userId: socket.user.id,
+            clientId: socket.client.id,
+          },
+        },
+        { new: true }
+      )
 
       switch (type) {
         case LoginType.GENERIC: {
@@ -203,24 +224,51 @@ class Login extends Event {
           console.info(
             `Login: ${socket.user.email} - session token signed, sending to client`
           )
+
           this.socket.token = token
-          return this.send(type, 1, token)
+
+          let versionInfo = await VersionModel.findOne({
+            status: 1,
+            crc: this.socket.fileCRC,
+          }).sort({ updatedAt: -1 })
+
+          if (versionInfo) {
+            return this.send({ type: type, status: 1, token: token })
+          } else {
+            return this.send({ type: type, status: 2, token: token })
+          }
         }
 
         case LoginType.TOKEN: {
           console.info(
             `Login: ${socket.user.email} - token validation success, user authorized`
           )
+
           this.socket.token = token
-          return this.send(type, 1)
+
+          let versionInfo = await VersionModel.findOne({
+            status: 1,
+            crc: this.socket.fileCRC,
+          }).sort({ updatedAt: -1 })
+
+          if (versionInfo) {
+            return this.send({ type: type, status: 1, token: token })
+          } else {
+            return this.send({ type: type, status: 2, token: token })
+          }
         }
       }
     }
 
-    this.send(type, 0)
+    this.send({ type: type, status: 0, message: statusMessage })
   }
 
-  async send(type, status, token = '') {
+  async send({
+    type = LoginType.GENERIC,
+    status = 0,
+    token = '',
+    message = '',
+  }) {
     const packet = new ByteBuffer()
 
     packet.writeUnsignedByte(this.options.header)
@@ -228,12 +276,14 @@ class Login extends Event {
     packet.writeUnsignedByte(type)
     packet.writeUnsignedByte(status)
 
-    if (status == 1) {
-      packet.writeUnsignedInt(this.socket.user.type)
+    if (status == 0) {
+      packet.writeString(message, true)
     }
 
-    if (token != '') {
-      packet.writeString(token, true)
+    if (status == 1) {
+      if (token != '') {
+        packet.writeString(token, true)
+      }
     }
 
     this.socket.emit('send', packet.raw)

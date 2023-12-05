@@ -10,11 +10,13 @@ import { RateLimiterMemory } from 'rate-limiter-flexible'
 import express from 'express'
 import logger from 'morgan'
 import cors from 'cors'
-import lzf from 'lzf'
+//import lzf from 'lzf'
+import SessionModel from './models/session.js'
 
 import adminMiddleware from './middleware/admin.js'
 import authLoginRouter from './routes/auth/login.js'
 import adminPointerRouter from './routes/admin/pointer.js'
+import adminVersionRouter from './routes/admin/version.js'
 import adminUserRouter from './routes/admin/user.js'
 
 class Server extends EventEmitter {
@@ -22,7 +24,6 @@ class Server extends EventEmitter {
     super()
     this.options = options
     this.server = null
-    this.sockets = []
     this.eventPromises = []
 
     this.streamHeader = 0xaa55
@@ -82,6 +83,8 @@ class Server extends EventEmitter {
 
     socket.responseTime = 0
 
+    socket.fileCRC = 0xffffffff
+
     socket.generateSeed = (a) => {
       var t = (a += 0x6d2b79f5)
       t = Math.imul(t ^ (t >>> 15), t | 1)
@@ -132,6 +135,11 @@ class Server extends EventEmitter {
     }
 
     socket.pingIntervalId = setInterval(socket.pingInterval, 30000)
+
+    socket.data = await SessionModel.create({
+      socketId: socket.id,
+      ip: socket.remoteAddress,
+    })
   }
 
   async createServer() {
@@ -154,12 +162,10 @@ class Server extends EventEmitter {
       )
     })
 
-    let sockets = this.sockets
-
     this.server.on('connection', async (socket) => {
       this.connectionRateLimiter
         .consume(socket.remoteAddress, 1)
-        .then(() => {
+        .then(async () => {
           this.initializeSocket(socket)
 
           socket.on('data', async (data) => {
@@ -227,10 +233,9 @@ class Server extends EventEmitter {
               decryptedPacket.readUnsignedInt()
 
               if (flag) {
-                const packetCommpressed = decryptedPacket.read()
-                const uncompressedPacket = lzf.decompress(packetCommpressed.raw)
-
-                decryptedPacket = new ByteBuffer(Array.from(uncompressedPacket))
+                //const packetCommpressed = decryptedPacket.read()
+                //const uncompressedPacket = lzf.decompress(packetCommpressed.raw)
+                //decryptedPacket = new ByteBuffer(Array.from(uncompressedPacket))
               }
 
               const packetHeader = decryptedPacket.readByte()
@@ -257,13 +262,11 @@ class Server extends EventEmitter {
 
               //Packet
               if (compress && data.length > 500) {
-                encryptionPacket.writeUnsignedByte(1) //compression flag
-                encryptionPacket.writeUnsignedInt(data.length) //raw packet size
-
-                var compressedData = lzf.compress(data)
-
-                encryptionPacket.writeUnsignedInt(compressedData.length) //compressed packet size
-                encryptionPacket.write(compressedData) //compressed data
+                //encryptionPacket.writeUnsignedByte(1) //compression flag
+                //encryptionPacket.writeUnsignedInt(data.length) //raw packet size
+                //var compressedData = lzf.compress(data)
+                //encryptionPacket.writeUnsignedInt(compressedData.length) //compressed packet size
+                //encryptionPacket.write(compressedData) //compressed data
               } else {
                 encryptionPacket.writeUnsignedByte(0) //compression flag
                 encryptionPacket.writeUnsignedInt(data.length) //raw packet size
@@ -296,11 +299,7 @@ class Server extends EventEmitter {
                 'Close: ' + socket.remoteAddress + ':' + socket.remotePort
               )
 
-              let index = sockets.findIndex(function (o) {
-                return o.id === socket.id
-              })
-
-              if (index !== -1) sockets.splice(index, 1)
+              await SessionModel.findByIdAndDelete(socket.data.id)
 
               clearTimeout(socket.waitingReadyTimeoutId)
               clearTimeout(socket.pingIntervalId)
@@ -313,17 +312,19 @@ class Server extends EventEmitter {
           })
 
           socket.on('error', async (error) => {
-            console.log(
-              'Error: ' +
-                socket.remoteAddress +
-                ':' +
-                socket.remotePort +
-                ' - ' +
-                error.code
-            )
+            try {
+              console.log(
+                'Error: ' +
+                  socket.remoteAddress +
+                  ':' +
+                  socket.remotePort +
+                  ' - ' +
+                  error.code
+              )
+            } catch (error) {
+              console.info(error)
+            }
           })
-
-          sockets.push(socket)
         })
         .catch(() => {
           console.info(`Connection rate limited, socket destroying`)
@@ -349,6 +350,7 @@ class Server extends EventEmitter {
     //Routes
     this.express.use('/auth/login', authLoginRouter)
     this.express.use('/admin/pointer', adminMiddleware, adminPointerRouter)
+    this.express.use('/admin/version', adminMiddleware, adminVersionRouter)
     this.express.use('/admin/user', adminMiddleware, adminUserRouter)
     //this.express.use('/payment', paymentRouter)
     //this.express.use('/client', userMiddleware, clientRouter)
