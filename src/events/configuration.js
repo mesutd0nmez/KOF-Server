@@ -4,14 +4,15 @@ import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
 import ConfigurationModel from '../models/configuration.js'
 import SessionModel from '../models/session.js'
-
+import fs from 'fs'
+import winston from 'winston'
 class Configuration extends Event {
   constructor(server, socket) {
     super(server, socket, {
       header: PacketHeader.CONFIGURATION,
       authorization: true,
       rateLimitOpts: {
-        points: 1000,
+        points: 50,
         duration: 1, // Per second
       },
     })
@@ -46,22 +47,70 @@ class Configuration extends Event {
             name: characterName,
           })
 
+          let configurationData = ''
+
           if (!configurationCollection) {
             await ConfigurationModel.create({
               userId: this.options.userId,
               platform: platform,
               server: serverIndex + 1,
               name: characterName,
-              configuration: null,
-            }).then((createdConfiguration) => {
+            }).then(async (createdConfiguration) => {
               configurationCollection = createdConfiguration
-              console.info(`Configuration: User default configuration created`)
+
+              await fs.writeFileSync(
+                `./data/configurations/${configurationCollection.id}.ini`,
+                configurationData
+              )
+
+              winston.info(
+                `Configuration: User default configuration created`,
+                {
+                  metadata: {
+                    user: this.socket.user ? this.socket.user.id : null,
+                    client: this.socket.client ? this.socket.client.id : null,
+                    processId: this.socket.processId,
+                    crc: this.socket.fileCRC,
+                    ip: this.socket.remoteAddress,
+                  },
+                }
+              )
             })
           } else {
-            console.info(`Configuration: User configuration loaded`)
+            try {
+              if (
+                fs.existsSync(
+                  `./data/configurations/${configurationCollection.id}.ini`
+                )
+              ) {
+                configurationData = await fs.readFileSync(
+                  `./data/configurations/${configurationCollection.id}.ini`
+                )
+              }
+            } catch (error) {
+              winston.error(error, {
+                metadata: {
+                  user: this.socket.user ? this.socket.user.id : null,
+                  client: this.socket.client ? this.socket.client.id : null,
+                  processId: this.socket.processId,
+                  crc: this.socket.fileCRC,
+                  ip: this.socket.remoteAddress,
+                },
+              })
+            }
+
+            winston.info(`Configuration: User configuration loaded`, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
           }
 
-          this.send(type, configurationCollection.configuration)
+          this.send(type, configurationData)
         }
         break
       case ConfigurationRequestType.SAVE:
@@ -69,7 +118,8 @@ class Configuration extends Event {
           const platform = packet.readUnsignedByte()
           const serverIndex = packet.readUnsignedByte()
           const characterName = packet.readString(true)
-          const configurationData = packet.readString(true)
+          const configurationLength = packet.readUnsignedInt()
+          const configurationData = packet.read(configurationLength)
 
           this.socket.data = await SessionModel.findOneAndUpdate(
             { _id: this.socket.data.id },
@@ -83,18 +133,50 @@ class Configuration extends Event {
             { new: true }
           )
 
-          await ConfigurationModel.updateOne(
-            {
+          let configurationCollection = await ConfigurationModel.findOne({
+            userId: this.options.userId,
+            platform: platform,
+            server: serverIndex + 1,
+            name: characterName,
+          })
+
+          if (!configurationCollection) {
+            await ConfigurationModel.create({
               userId: this.options.userId,
               platform: platform,
               server: serverIndex + 1,
               name: characterName,
-            },
-            { configuration: configurationData },
-            { upsert: true }
+            }).then(async (createdConfiguration) => {
+              configurationCollection = createdConfiguration
+              winston.info(
+                `Configuration: User default configuration created`,
+                {
+                  metadata: {
+                    user: this.socket.user ? this.socket.user.id : null,
+                    client: this.socket.client ? this.socket.client.id : null,
+                    processId: this.socket.processId,
+                    crc: this.socket.fileCRC,
+                    ip: this.socket.remoteAddress,
+                  },
+                }
+              )
+            })
+          }
+
+          await fs.writeFileSync(
+            `./data/configurations/${configurationCollection.id}.ini`,
+            configurationData.raw
           )
 
-          console.info(`Configuration: User configuration saved`)
+          winston.info(`Configuration: User configuration saved`, {
+            metadata: {
+              user: this.socket.user ? this.socket.user.id : null,
+              client: this.socket.client ? this.socket.client.id : null,
+              processId: this.socket.processId,
+              crc: this.socket.fileCRC,
+              ip: this.socket.remoteAddress,
+            },
+          })
         }
         break
     }
@@ -104,14 +186,14 @@ class Configuration extends Event {
     const packet = new ByteBuffer()
 
     packet.writeUnsignedByte(this.options.header)
-
     packet.writeUnsignedByte(type)
 
     if (configuration) {
-      packet.writeString(configuration, true)
+      packet.writeUnsignedInt(configuration.length)
+      packet.write(configuration)
     }
 
-    this.socket.emit('send', packet.raw)
+    this.socket.emit('send', packet.raw, true)
   }
 }
 

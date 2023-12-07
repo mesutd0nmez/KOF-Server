@@ -16,9 +16,6 @@ const configurationSchema = mongoose.Schema(
       type: String,
       default: null,
     },
-    configuration: {
-      type: Buffer,
-    },
   },
   {
     versionKey: false,

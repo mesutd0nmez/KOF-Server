@@ -3,6 +3,7 @@ import UserModel from '../../models/user.js'
 import jwt from 'jsonwebtoken'
 import validator from 'validator'
 import bcrypt from 'bcryptjs'
+import winston from 'winston'
 
 const router = express.Router()
 
@@ -33,7 +34,7 @@ router.post('/', async (req, res) => {
       return res.status(400).send({ status: 'Invalid request' })
     }
   } catch (error) {
-    console.error(error)
+    winston.error(error)
     return res.status(400).send({ status: 'Invalid request' })
   }
 })

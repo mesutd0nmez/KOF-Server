@@ -4,6 +4,7 @@ import Event from '../core/event.js'
 import fs from 'fs'
 import PlatformType from '../core/enums/platformType.js'
 import SessionModel from '../models/session.js'
+import winston from 'winston'
 
 class Injection extends Event {
   constructor(server, socket) {
@@ -11,7 +12,7 @@ class Injection extends Event {
       header: PacketHeader.POINTER,
       authorization: true,
       rateLimitOpts: {
-        points: 1000,
+        points: 50,
         duration: 1, // Per second
       },
     })
@@ -40,7 +41,15 @@ class Injection extends Event {
               `./data/pointers/usko.ini`
             )
           } catch (error) {
-            console.info(error)
+            winston.error(error, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
           }
         }
         break
@@ -52,7 +61,15 @@ class Injection extends Event {
               `./data/pointers/cnko.ini`
             )
           } catch (error) {
-            console.info(error)
+            winston.error(error, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
           }
         }
         break
@@ -64,7 +81,15 @@ class Injection extends Event {
               `./data/pointers/koko.ini`
             )
           } catch (error) {
-            console.info(error)
+            winston.error(error, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
           }
         }
         break
@@ -76,17 +101,41 @@ class Injection extends Event {
               `./data/pointers/stko.ini`
             )
           } catch (error) {
-            console.info(error)
+            winston.error(error, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
           }
         }
         break
     }
 
     if (defaultPointerFile) {
-      console.info(`Pointer: List sended`)
+      winston.info(`Pointer: List sended`, {
+        metadata: {
+          user: this.socket.user ? this.socket.user.id : null,
+          client: this.socket.client ? this.socket.client.id : null,
+          processId: this.socket.processId,
+          crc: this.socket.fileCRC,
+          ip: this.socket.remoteAddress,
+        },
+      })
       this.send(defaultPointerFile, defaultPointerFile.length)
     } else {
-      console.info(`Pointer: Unable to send pointer due to technical problem`)
+      winston.info(`Pointer: Unable to send pointer due to technical problem`, {
+        metadata: {
+          user: this.socket.user ? this.socket.user.id : null,
+          client: this.socket.client ? this.socket.client.id : null,
+          processId: this.socket.processId,
+          crc: this.socket.fileCRC,
+          ip: this.socket.remoteAddress,
+        },
+      })
     }
   }
 
@@ -98,7 +147,7 @@ class Injection extends Event {
     packet.writeUnsignedInt(bufferLength)
     packet.write(buffer)
 
-    this.socket.emit('send', packet.raw)
+    this.socket.emit('send', packet.raw, true)
   }
 }
 

@@ -1,5 +1,6 @@
 import express from 'express'
 import multer from 'multer'
+import winston from 'winston'
 
 const router = express.Router()
 
@@ -22,7 +23,7 @@ router.post('/', upload.single('file'), async (req, res) => {
   try {
     res.send({ status: 'Pointer file updated' })
   } catch (error) {
-    console.error(error)
+    winston.error(error)
     return res.status(401).send()
   }
 })

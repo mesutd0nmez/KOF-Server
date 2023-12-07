@@ -5,6 +5,7 @@ import ClientModel from '../../models/client.js'
 import crypto from 'crypto'
 import validator from 'validator'
 import bcrypt from 'bcryptjs'
+import winston from 'winston'
 
 const router = express.Router()
 
@@ -62,7 +63,7 @@ router.get('/', async (req, res) => {
       return res.send({ status: `User ${email} doesn't exist` })
     }
   } catch (error) {
-    console.error(error)
+    winston.error(error)
     return res.status(400).send({ status: 'Invalid request' })
   }
 })
@@ -107,7 +108,7 @@ router.post('/', async (req, res) => {
       })
     }
   } catch (error) {
-    console.error(error)
+    winston.error(error)
     return res.status(400).send({ status: 'Invalid request' })
   }
 })
@@ -145,7 +146,7 @@ router.patch('/', async (req, res) => {
       return res.send({ status: `User ${email} doesn't exist` })
     }
   } catch (error) {
-    console.error(error)
+    winston.error(error)
     return res.status(400).send({ status: 'Invalid request' })
   }
 })

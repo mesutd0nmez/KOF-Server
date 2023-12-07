@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs'
 import validator from 'validator'
 import SessionModel from '../models/session.js'
 import VersionModel from '../models/version.js'
+import winston from 'winston'
 
 class Login extends Event {
   constructor(server, socket) {
@@ -16,7 +17,7 @@ class Login extends Event {
       header: PacketHeader.LOGIN,
       authorization: false,
       rateLimitOpts: {
-        points: 1000,
+        points: 50,
         duration: 1, // Per second
       },
     })
@@ -43,7 +44,15 @@ class Login extends Event {
           }
 
           if (!validator.isEmail(email)) {
-            console.info(`Login: ${email} - is not valid email`)
+            winston.warn(`Login: ${email} - is not valid email`, {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            })
             return
           }
 
@@ -57,13 +66,30 @@ class Login extends Event {
           if (socket.user) {
             if (!(await bcrypt.compare(password, socket.user.password))) {
               socket.user = null
-              console.info(`Login: ${email} - password does not match`)
+              winston.warn(`Login: ${email} - password does not match`, {
+                metadata: {
+                  user: socket.user ? socket.user.id : null,
+                  client: socket.client ? socket.client.id : null,
+                  processId: socket.processId,
+                  crc: socket.fileCRC,
+                  ip: socket.remoteAddress,
+                },
+              })
               statusMessage = 'Aktivasyon bilgileri hatali'
             }
           } else {
             if (process.env.AUTO_REGISTRATION == 1) {
-              console.info(
-                `Login: ${email} - not found, auto registration in progress`
+              winston.warn(
+                `Login: ${email} - not found, auto registration in progress`,
+                {
+                  metadata: {
+                    user: socket.user ? socket.user.id : null,
+                    client: socket.client ? socket.client.id : null,
+                    processId: socket.processId,
+                    crc: socket.fileCRC,
+                    ip: socket.remoteAddress,
+                  },
+                }
               )
 
               const hashedPassword = await bcrypt.hash(password, 10)
@@ -78,10 +104,26 @@ class Login extends Event {
                 subscriptionEndAt: futureDate,
               }).then((createdUser) => {
                 socket.user = createdUser
-                console.info(`Login: ${createdUser.email} - created`)
+                winston.info(`Login: ${createdUser.email} - created`, {
+                  metadata: {
+                    user: socket.user ? socket.user.id : null,
+                    client: socket.client ? socket.client.id : null,
+                    processId: socket.processId,
+                    crc: socket.fileCRC,
+                    ip: socket.remoteAddress,
+                  },
+                })
               })
             } else {
-              console.info(`Login: ${email} - not found`)
+              winston.warn(`Login: ${email} - not found`, {
+                metadata: {
+                  user: socket.user ? socket.user.id : null,
+                  client: socket.client ? socket.client.id : null,
+                  processId: socket.processId,
+                  crc: socket.fileCRC,
+                  ip: socket.remoteAddress,
+                },
+              })
               statusMessage = 'Aktivasyon basarisiz'
             }
           }
@@ -102,20 +144,43 @@ class Login extends Event {
           socket.user = await UserModel.findOne({ _id: decoded.userId })
 
           if (!socket.user) {
-            console.info(`Login: There is no user with this token`)
+            winston.warn(`Login: There is no user with this token`, {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            })
             statusMessage = 'Aktivasyon basarisiz'
           }
         } catch (err) {
-          console.info(err)
+          winston.error(err, {
+            metadata: {
+              user: socket.user ? socket.user.id : null,
+              client: socket.client ? socket.client.id : null,
+              processId: socket.processId,
+              crc: socket.fileCRC,
+              ip: socket.remoteAddress,
+            },
+          })
           socket.user = null
-          console.info(`Login: Invalid token`)
           statusMessage = 'Aktivasyon basarisiz'
         }
         break
     }
 
     if (socket.user) {
-      console.info(`Login: ${socket.user.email} - logging in`)
+      winston.info(`Login: ${socket.user.email} - logging in`, {
+        metadata: {
+          user: socket.user ? socket.user.id : null,
+          client: socket.client ? socket.client.id : null,
+          processId: socket.processId,
+          crc: socket.fileCRC,
+          ip: socket.remoteAddress,
+        },
+      })
 
       socket.user.updatedAt = Date.now()
       socket.user.save()
@@ -124,8 +189,17 @@ class Login extends Event {
       const subscriptionEndAt = new Date(socket.user.subscriptionEndAt)
 
       if (today > subscriptionEndAt) {
-        console.info(
-          `Login: ${socket.user.email} - Account has subscription time end`
+        winston.warn(
+          `Login: ${socket.user.email} - Account has subscription time end`,
+          {
+            metadata: {
+              user: socket.user ? socket.user.id : null,
+              client: socket.client ? socket.client.id : null,
+              processId: socket.processId,
+              crc: socket.fileCRC,
+              ip: socket.remoteAddress,
+            },
+          }
         )
 
         return this.send({
@@ -144,8 +218,17 @@ class Login extends Event {
 
       if (!findedClient) {
         if (socket.user.credit == 0) {
-          console.info(
-            `Login: ${socket.user.email} - Account has no credit limit for create new client`
+          winston.warn(
+            `Login: ${socket.user.email} - Account has no credit limit for create new client`,
+            {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            }
           )
 
           return this.send({
@@ -173,14 +256,32 @@ class Login extends Event {
             socket.user.save()
           }
 
-          console.info(
-            `Login: ${socket.user.email} - client ${client._id} created`
+          winston.info(
+            `Login: ${socket.user.email} - client ${client._id} created`,
+            {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            }
           )
         })
       } else {
         if (!socket.user._id.equals(socket.user.id)) {
-          console.info(
-            `Login: ${socket.user.email} - client ${findedClient._id} registered another user (${findedClient.userId} != ${socket.user._id}), socket destroying`
+          winston.warn(
+            `Login: ${socket.user.email} - client ${findedClient._id} registered another user (${findedClient.userId} != ${socket.user._id})`,
+            {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            }
           )
 
           return this.send({
@@ -197,8 +298,17 @@ class Login extends Event {
 
         socket.client = findedClient
 
-        console.info(
-          `Login: ${socket.user.email} - client ${socket.client._id}`
+        winston.info(
+          `Login: ${socket.user.email} - client ${socket.client._id}`,
+          {
+            metadata: {
+              user: socket.user ? socket.user.id : null,
+              client: socket.client ? socket.client.id : null,
+              processId: socket.processId,
+              crc: socket.fileCRC,
+              ip: socket.remoteAddress,
+            },
+          }
         )
       }
 
@@ -215,14 +325,31 @@ class Login extends Event {
 
       switch (type) {
         case LoginType.GENERIC: {
-          console.info(`Login: ${socket.user.email} - signing session token`)
+          winston.info(`Login: ${socket.user.email} - signing session token`, {
+            metadata: {
+              user: socket.user ? socket.user.id : null,
+              client: socket.client ? socket.client.id : null,
+              processId: socket.processId,
+              crc: socket.fileCRC,
+              ip: socket.remoteAddress,
+            },
+          })
 
           token = jwt.sign({ userId: socket.user._id }, process.env.TOKEN_KEY, {
             expiresIn: '365d',
           })
 
-          console.info(
-            `Login: ${socket.user.email} - session token signed, sending to client`
+          winston.info(
+            `Login: ${socket.user.email} - session token signed, sending to client`,
+            {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            }
           )
 
           this.socket.token = token
@@ -230,7 +357,7 @@ class Login extends Event {
           let versionInfo = await VersionModel.findOne({
             status: 1,
             crc: this.socket.fileCRC,
-          }).sort({ updatedAt: -1 })
+          })
 
           if (versionInfo) {
             return this.send({ type: type, status: 1, token: token })
@@ -240,8 +367,17 @@ class Login extends Event {
         }
 
         case LoginType.TOKEN: {
-          console.info(
-            `Login: ${socket.user.email} - token validation success, user authorized`
+          winston.info(
+            `Login: ${socket.user.email} - token validation success, user authorized`,
+            {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            }
           )
 
           this.socket.token = token
@@ -249,7 +385,7 @@ class Login extends Event {
           let versionInfo = await VersionModel.findOne({
             status: 1,
             crc: this.socket.fileCRC,
-          }).sort({ updatedAt: -1 })
+          })
 
           if (versionInfo) {
             return this.send({ type: type, status: 1, token: token })
@@ -280,10 +416,8 @@ class Login extends Event {
       packet.writeString(message, true)
     }
 
-    if (status == 1) {
-      if (token != '') {
-        packet.writeString(token, true)
-      }
+    if (status == 1 || status == 2) {
+      packet.writeString(token, true)
     }
 
     this.socket.emit('send', packet.raw)

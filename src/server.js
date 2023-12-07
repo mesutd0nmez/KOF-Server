@@ -8,9 +8,11 @@ import { createHash, encrypt, decrypt } from './utils/cryption.js'
 import { clearTimeout } from 'timers'
 import { RateLimiterMemory } from 'rate-limiter-flexible'
 import express from 'express'
-import logger from 'morgan'
 import cors from 'cors'
-//import lzf from 'lzf'
+import lzf from 'lzf'
+import winston from 'winston'
+import winstonMongo from 'winston-mongodb'
+
 import SessionModel from './models/session.js'
 
 import adminMiddleware from './middleware/admin.js'
@@ -18,7 +20,6 @@ import authLoginRouter from './routes/auth/login.js'
 import adminPointerRouter from './routes/admin/pointer.js'
 import adminVersionRouter from './routes/admin/version.js'
 import adminUserRouter from './routes/admin/user.js'
-
 class Server extends EventEmitter {
   constructor(options) {
     super()
@@ -34,12 +35,45 @@ class Server extends EventEmitter {
     this.socketIdCounter = 0
 
     this.connectionRateLimitOpts = {
-      points: 5,
+      points: 3,
       duration: 1,
     }
 
     this.connectionRateLimiter = new RateLimiterMemory(
       this.connectionRateLimitOpts
+    )
+
+    winston.add(
+      new winston.transports.MongoDB({
+        db: process.env.MONGODB_URL,
+        collection: 'logs',
+        level: 'silly',
+        options: { useUnifiedTopology: true },
+      })
+    )
+
+    winston.add(
+      new winston.transports.Console({
+        level: process.env.NODE_ENV == 'development' ? 'silly' : 'error',
+        format: winston.format.combine(
+          winston.format.colorize(),
+          winston.format.simple()
+        ),
+      })
+    )
+
+    winston.add(
+      new winston.transports.File({
+        filename: './logs/error.log',
+        level: 'error',
+      })
+    )
+
+    winston.add(
+      new winston.transports.File({
+        filename: './logs/combined.log',
+        level: 'silly',
+      })
     )
   }
 
@@ -58,7 +92,7 @@ class Server extends EventEmitter {
   }
 
   async initializeSocket(socket) {
-    console.log(`Socket: ${socket.remoteAddress}:${socket.remotePort}`)
+    winston.info(`Socket: ${socket.remoteAddress}:${socket.remotePort}`)
 
     if (this.socketIdCounter == 65535) {
       this.socketIdCounter = 0
@@ -78,6 +112,9 @@ class Server extends EventEmitter {
     socket.client = null
     socket.recv = new EventEmitter()
     socket.send = new EventEmitter()
+
+    socket.lastPongTime = 0
+    socket.lastPingTime = 0
 
     socket.recvBuffer = Buffer.alloc(0)
 
@@ -120,8 +157,17 @@ class Server extends EventEmitter {
     socket.waitingReadyTimeoutId = 0
     socket.waitingReadyTimeout = () => {
       if (socket.connectionReadyTime == 0) {
-        console.info(
-          `Client not sended ready packet, is suspicious socket. Connection destroying`
+        winston.warn(
+          `Client not sended ready packet, is suspicious socket. Connection destroying`,
+          {
+            metadata: {
+              user: socket.user ? socket.user.id : null,
+              client: socket.client ? socket.client.id : null,
+              processId: socket.processId,
+              crc: socket.fileCRC,
+              ip: socket.remoteAddress,
+            },
+          }
         )
         socket.destroy()
       }
@@ -134,17 +180,12 @@ class Server extends EventEmitter {
       socket.send.emit(PacketHeader.PING)
     }
 
-    socket.pingIntervalId = setInterval(socket.pingInterval, 30000)
-
-    socket.data = await SessionModel.create({
-      socketId: socket.id,
-      ip: socket.remoteAddress,
-    })
+    socket.pingIntervalId = setInterval(socket.pingInterval, 15000)
   }
 
   async createServer() {
     if (this.server) {
-      console.info(`Server already running`)
+      winston.error(`Server already running`)
       return
     }
 
@@ -156,10 +197,7 @@ class Server extends EventEmitter {
     })
 
     this.server.listen(this.options.port, () => {
-      console.log(`Server: Running on port - ${this.options.port}`)
-      console.log(
-        `Server: Encryption Key - ${this.encryptionKey.toString('hex')}`
-      )
+      winston.info(`Server: Running on port - ${this.options.port}`)
     })
 
     this.server.on('connection', async (socket) => {
@@ -176,15 +214,33 @@ class Server extends EventEmitter {
                 socket.recvBuffer.length == 0 &&
                 !startDelimeter.equals(Buffer.from([0x55, 0xaa]))
               ) {
-                console.info(
-                  'Process packet failed, packet not starting with 0xaa55, connection destroying'
+                winston.warn(
+                  'Process packet failed, packet not starting with 0xaa55, connection destroying',
+                  {
+                    metadata: {
+                      user: socket.user ? socket.user.id : null,
+                      client: socket.client ? socket.client.id : null,
+                      processId: socket.processId,
+                      crc: socket.fileCRC,
+                      ip: socket.remoteAddress,
+                    },
+                  }
                 )
                 return
               }
 
               if (data.length < 10) {
-                console.info(
-                  'Process packet failed, packet size need minimum 9, connection destroying'
+                winston.warn(
+                  'Process packet failed, packet size need minimum 9, connection destroying',
+                  {
+                    metadata: {
+                      user: socket.user ? socket.user.id : null,
+                      client: socket.client ? socket.client.id : null,
+                      processId: socket.processId,
+                      crc: socket.fileCRC,
+                      ip: socket.remoteAddress,
+                    },
+                  }
                 )
                 return
               }
@@ -198,7 +254,15 @@ class Server extends EventEmitter {
                 socket.recvBuffer = Buffer.alloc(0)
               }
             } catch (error) {
-              console.info(error)
+              winston.error(error, {
+                metadata: {
+                  user: socket.user ? socket.user.id : null,
+                  client: socket.client ? socket.client.id : null,
+                  processId: socket.processId,
+                  crc: socket.fileCRC,
+                  ip: socket.remoteAddress,
+                },
+              })
             }
           })
 
@@ -208,12 +272,28 @@ class Server extends EventEmitter {
               const endDelimeter = data.slice(data.length - 2, data.length)
 
               if (!startDelimeter.equals(Buffer.from([0x55, 0xaa]))) {
-                console.info('Process packet failed, StreamHeader != 0xaa55')
+                winston.warn('Process packet failed, StreamHeader != 0xaa55', {
+                  metadata: {
+                    user: socket.user ? socket.user.id : null,
+                    client: socket.client ? socket.client.id : null,
+                    processId: socket.processId,
+                    crc: socket.fileCRC,
+                    ip: socket.remoteAddress,
+                  },
+                })
                 return
               }
 
               if (!endDelimeter.equals(Buffer.from([0xaa, 0x55]))) {
-                console.info('Process packet failed, StreamFooter != 0x55aa')
+                winston.warn('Process packet failed, StreamFooter != 0x55aa', {
+                  metadata: {
+                    user: socket.user ? socket.user.id : null,
+                    client: socket.client ? socket.client.id : null,
+                    processId: socket.processId,
+                    crc: socket.fileCRC,
+                    ip: socket.remoteAddress,
+                  },
+                })
                 return
               }
 
@@ -230,12 +310,14 @@ class Server extends EventEmitter {
               const flag = decryptedPacket.readUnsignedByte()
 
               //Raw packet size
-              decryptedPacket.readUnsignedInt()
+              const size = decryptedPacket.readUnsignedInt()
 
               if (flag) {
-                //const packetCommpressed = decryptedPacket.read()
-                //const uncompressedPacket = lzf.decompress(packetCommpressed.raw)
-                //decryptedPacket = new ByteBuffer(Array.from(uncompressedPacket))
+                const packetCommpressed = decryptedPacket.read()
+
+                const uncompressedPacket = lzf.decompress(packetCommpressed.raw)
+
+                decryptedPacket = new ByteBuffer(Array.from(uncompressedPacket))
               }
 
               const packetHeader = decryptedPacket.readByte()
@@ -247,7 +329,15 @@ class Server extends EventEmitter {
                 socket.recv.emit(packetHeader)
               }
             } catch (error) {
-              console.info(error)
+              winston.error(error, {
+                metadata: {
+                  user: socket.user ? socket.user.id : null,
+                  client: socket.client ? socket.client.id : null,
+                  processId: socket.processId,
+                  crc: socket.fileCRC,
+                  ip: socket.remoteAddress,
+                },
+              })
             }
           })
 
@@ -261,12 +351,14 @@ class Server extends EventEmitter {
               const encryptionPacket = new ByteBuffer()
 
               //Packet
-              if (compress && data.length > 500) {
-                //encryptionPacket.writeUnsignedByte(1) //compression flag
-                //encryptionPacket.writeUnsignedInt(data.length) //raw packet size
-                //var compressedData = lzf.compress(data)
-                //encryptionPacket.writeUnsignedInt(compressedData.length) //compressed packet size
-                //encryptionPacket.write(compressedData) //compressed data
+              if (compress) {
+                encryptionPacket.writeUnsignedByte(1) //compression flag
+                encryptionPacket.writeUnsignedInt(data.length) //raw packet size
+
+                var compressedData = lzf.compress(data)
+
+                encryptionPacket.writeUnsignedInt(compressedData.length) //compressed packet size
+                encryptionPacket.write(compressedData) //compressed data
               } else {
                 encryptionPacket.writeUnsignedByte(0) //compression flag
                 encryptionPacket.writeUnsignedInt(data.length) //raw packet size
@@ -289,17 +381,36 @@ class Server extends EventEmitter {
 
               socket.write(packet.raw)
             } catch (error) {
-              console.info(error)
+              winston.error(error, {
+                metadata: {
+                  user: socket.user ? socket.user.id : null,
+                  client: socket.client ? socket.client.id : null,
+                  processId: socket.processId,
+                  crc: socket.fileCRC,
+                  ip: socket.remoteAddress,
+                },
+              })
             }
           })
 
           socket.on('close', async () => {
             try {
-              console.log(
-                'Close: ' + socket.remoteAddress + ':' + socket.remotePort
+              winston.info(
+                'Close: ' + socket.remoteAddress + ':' + socket.remotePort,
+                {
+                  metadata: {
+                    user: socket.user ? socket.user.id : null,
+                    client: socket.client ? socket.client.id : null,
+                    processId: socket.processId,
+                    crc: socket.fileCRC,
+                    ip: socket.remoteAddress,
+                  },
+                }
               )
 
-              await SessionModel.findByIdAndDelete(socket.data.id)
+              if (socket.data) {
+                await SessionModel.findByIdAndDelete(socket.data.id)
+              }
 
               clearTimeout(socket.waitingReadyTimeoutId)
               clearTimeout(socket.pingIntervalId)
@@ -307,27 +418,67 @@ class Server extends EventEmitter {
               socket.recv.removeAllListeners()
               socket.send.removeAllListeners()
             } catch (error) {
-              console.info(error)
+              winston.error(error, {
+                metadata: {
+                  user: socket.user ? socket.user.id : null,
+                  client: socket.client ? socket.client.id : null,
+                  processId: socket.processId,
+                  crc: socket.fileCRC,
+                  ip: socket.remoteAddress,
+                },
+              })
             }
           })
 
           socket.on('error', async (error) => {
             try {
-              console.log(
+              if (socket.data) {
+                await SessionModel.findByIdAndDelete(socket.data.id)
+              }
+
+              winston.error(
                 'Error: ' +
                   socket.remoteAddress +
                   ':' +
                   socket.remotePort +
                   ' - ' +
-                  error.code
+                  error.code,
+                {
+                  metadata: {
+                    user: socket.user ? socket.user.id : null,
+                    client: socket.client ? socket.client.id : null,
+                    processId: socket.processId,
+                    crc: socket.fileCRC,
+                    ip: socket.remoteAddress,
+                  },
+                }
               )
             } catch (error) {
-              console.info(error)
+              winston.error(error, {
+                metadata: {
+                  user: socket.user ? socket.user.id : null,
+                  client: socket.client ? socket.client.id : null,
+                  processId: socket.processId,
+                  crc: socket.fileCRC,
+                  ip: socket.remoteAddress,
+                },
+              })
             }
           })
         })
         .catch(() => {
-          console.info(`Connection rate limited, socket destroying`)
+          winston.warn(
+            `${socket.remoteAddress} - Connection create rate limited, socket destroying`,
+            {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            }
+          )
           socket.destroy()
         })
     })
@@ -335,10 +486,6 @@ class Server extends EventEmitter {
 
   async createWebServer() {
     this.express = express()
-
-    this.express.use(
-      logger(process.env.NODE_ENV === 'development' ? 'dev' : 'combined')
-    )
 
     this.express.use(cors())
     this.express.use(express.json())
@@ -352,13 +499,9 @@ class Server extends EventEmitter {
     this.express.use('/admin/pointer', adminMiddleware, adminPointerRouter)
     this.express.use('/admin/version', adminMiddleware, adminVersionRouter)
     this.express.use('/admin/user', adminMiddleware, adminUserRouter)
-    //this.express.use('/payment', paymentRouter)
-    //this.express.use('/client', userMiddleware, clientRouter)
-    //this.express.use('/order', userMiddleware, orderRouter)
-    //this.express.use('/product', productRouter)
 
     this.express.listen(process.env.WEB_PORT, () => {
-      console.log(`Web: Running on port - ${process.env.WEB_PORT}`)
+      winston.info(`Web: Running on port - ${process.env.WEB_PORT}`)
     })
   }
 }

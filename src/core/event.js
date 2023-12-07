@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken'
+import winston from 'winston'
 
 class Event {
   constructor(server, socket, options) {
@@ -38,15 +39,18 @@ class Event {
           if (this.middleWareRecv()) {
             this.recv(packet)
           } else {
-            console.info(`Middleware: Invalid token, connection destroying`)
+            winston.warn(`Middleware: Invalid token, connection destroying`)
             this.socket.destroy()
           }
         })
         .catch(() => {
-          console.info(`Request rate limited`)
+          winston.warn(
+            `${this.socket.remoteAddress} - Event request rate limited, connection destroying`
+          )
+          this.socket.destroy()
         })
     } catch (err) {
-      console.info(err)
+      winston.error(err)
     }
   }
 
@@ -60,7 +64,7 @@ class Event {
         this.send(...args)
       }
     } catch (err) {
-      console.info(err)
+      winston.error(err)
     }
   }
 }

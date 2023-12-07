@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import { Server } from './src/server.js'
+import winston from 'winston'
 
 mongoose.set('strictQuery', false)
 
@@ -14,5 +15,5 @@ mongoose
     server.createWebServer()
   })
   .catch((error) => {
-    console.info(error)
+    winston.error(error)
   })

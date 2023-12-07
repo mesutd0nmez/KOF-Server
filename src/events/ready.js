@@ -3,6 +3,8 @@ import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
 import { createHash } from '../utils/cryption.js'
 import SessionModel from '../models/session.js'
+import VersionModel from '../models/version.js'
+import winston from 'winston'
 
 class Ready extends Event {
   constructor(server, socket) {
@@ -10,7 +12,7 @@ class Ready extends Event {
       header: PacketHeader.READY,
       authorization: false,
       rateLimitOpts: {
-        points: 1000,
+        points: 50,
         duration: 1, // Per second
       },
     })
@@ -20,19 +22,32 @@ class Ready extends Event {
     this.socket.processId = packet.readUnsignedInt()
     this.socket.fileCRC = packet.readUnsignedInt()
 
+    let versionInfo = await VersionModel.findOne({
+      crc: this.socket.fileCRC,
+    })
+
+    if (process.env.NODE_ENV != 'development') {
+      if (!versionInfo) {
+        winston.warn(`Possible file integrity activity suspicion`, {
+          metadata: {
+            processId: this.socket.processId,
+            crc: this.socket.fileCRC,
+            ip: this.socket.remoteAddress,
+          },
+        })
+        return this.socket.destroy()
+      }
+    }
+
     this.socket.connectionReadyTime = Date.now()
     this.socket.ready = true
 
-    this.socket.data = await SessionModel.findOneAndUpdate(
-      { _id: this.socket.data.id },
-      {
-        $set: {
-          processId: this.socket.processId,
-          fileCRC: this.socket.fileCRC,
-        },
-      },
-      { new: true }
-    )
+    this.socket.data = await SessionModel.create({
+      socketId: this.socket.id,
+      ip: this.socket.remoteAddress,
+      processId: this.socket.processId,
+      fileCRC: this.socket.fileCRC,
+    })
 
     await this.send()
 
@@ -45,7 +60,13 @@ class Ready extends Event {
       )
     )
 
-    console.info(`Socket: Ready`)
+    winston.info(`Socket: Ready`, {
+      metadata: {
+        processId: this.socket.processId,
+        crc: this.socket.fileCRC,
+        ip: this.socket.remoteAddress,
+      },
+    })
   }
 
   async send() {

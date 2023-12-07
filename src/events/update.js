@@ -2,6 +2,7 @@ import PacketHeader from '../core/enums/packetHeader.js'
 import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
 import fs from 'fs'
+import winston from 'winston'
 
 class Update extends Event {
   constructor(server, socket) {
@@ -9,7 +10,7 @@ class Update extends Event {
       header: PacketHeader.UPDATE,
       authorization: true,
       rateLimitOpts: {
-        points: 1000,
+        points: 50,
         duration: 1, // Per second
       },
     })
@@ -20,7 +21,15 @@ class Update extends Event {
       let updateFile = await fs.readFileSync(`./data/updates/Update.zip`)
       this.send(updateFile, updateFile.length)
     } catch (error) {
-      console.info(error)
+      winston.error(error, {
+        metadata: {
+          user: this.socket.user ? this.socket.user.id : null,
+          client: this.socket.client ? this.socket.client.id : null,
+          processId: this.socket.processId,
+          crc: this.socket.fileCRC,
+          ip: this.socket.remoteAddress,
+        },
+      })
     }
   }
 
