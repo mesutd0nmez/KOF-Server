@@ -10,7 +10,7 @@ class Ping extends Event {
       header: PacketHeader.PING,
       authorization: true,
       rateLimitOpts: {
-        points: 50,
+        points: 16,
         duration: 1, // Per second
       },
     })
@@ -19,12 +19,41 @@ class Ping extends Event {
   async recv(packet) {
     this.socket.lastPongTime = Date.now()
 
+    const pingMs = this.socket.lastPongTime - this.socket.lastPingTime
+
+    if (process.env.NODE_ENV == 'development') {
+      winston.info(`Ping: ${this.socket.remoteAddress} ${pingMs}ms`, {
+        metadata: {
+          user: this.socket.user ? this.socket.user.id : null,
+          client: this.socket.client ? this.socket.client.id : null,
+          processId: this.socket.processId,
+          crc: this.socket.fileCRC,
+          ip: this.socket.remoteAddress,
+        },
+      })
+    }
+
+    if (pingMs > 1000) {
+      winston.warn(
+        `Ping: ${this.socket.remoteAddress} ${pingMs}ms high ping, maybe locked process or network stability problem`,
+        {
+          metadata: {
+            user: this.socket.user ? this.socket.user.id : null,
+            client: this.socket.client ? this.socket.client.id : null,
+            processId: this.socket.processId,
+            crc: this.socket.fileCRC,
+            ip: this.socket.remoteAddress,
+          },
+        }
+      )
+    }
+
     if (process.env.NODE_ENV != 'development') {
       const timeDifference = this.socket.lastPongTime - this.socket.lastPingTime
 
-      if (timeDifference > 15000) {
+      if (timeDifference > 30000) {
         winston.warn(
-          'Time difference in last ping process is more than 15 seconds. Possible suspend activity or connection problem, socket destroyed',
+          'Time difference in last ping process is more than 30 seconds. Possible locked process or network stability problem, socket destroyed',
           {
             metadata: {
               user: this.socket.user ? this.socket.user.id : null,
@@ -62,21 +91,35 @@ class Ping extends Event {
   }
 
   async send() {
-    if (this.socket.lastPingTime != 0 && this.socket.lastPongTime == 0) {
-      winston.warn(
-        'Time difference in last ping process is more than 15 seconds. Possible suspend activity or connection problem, socket destroyed',
-        {
-          metadata: {
-            user: this.socket.user ? this.socket.user.id : null,
-            client: this.socket.client ? this.socket.client.id : null,
-            processId: this.socket.processId,
-            crc: this.socket.fileCRC,
-            ip: this.socket.remoteAddress,
-          },
-        }
-      )
+    if (process.env.NODE_ENV == 'development') {
+      winston.info(`Ping: ${this.socket.remoteAddress} Requested`, {
+        metadata: {
+          user: this.socket.user ? this.socket.user.id : null,
+          client: this.socket.client ? this.socket.client.id : null,
+          processId: this.socket.processId,
+          crc: this.socket.fileCRC,
+          ip: this.socket.remoteAddress,
+        },
+      })
+    }
 
-      return this.socket.destroy()
+    if (process.env.NODE_ENV != 'development') {
+      if (this.socket.lastPingTime != 0 && this.socket.lastPongTime == 0) {
+        winston.warn(
+          'Time difference in last ping process is more than 30 seconds. Possible locked process or network stability problem, socket destroyed',
+          {
+            metadata: {
+              user: this.socket.user ? this.socket.user.id : null,
+              client: this.socket.client ? this.socket.client.id : null,
+              processId: this.socket.processId,
+              crc: this.socket.fileCRC,
+              ip: this.socket.remoteAddress,
+            },
+          }
+        )
+
+        return this.socket.destroy()
+      }
     }
 
     this.socket.lastPongTime = 0
@@ -85,7 +128,14 @@ class Ping extends Event {
     const packet = new ByteBuffer()
 
     packet.writeUnsignedByte(this.options.header)
-    packet.writeUnsignedInt(this.socket.lastPingTime / 1000)
+
+    if (this.socket.user) {
+      packet.writeUnsignedInt(
+        this.socket.user.subscriptionEndAt.getTime() / 1000
+      )
+    } else {
+      packet.writeUnsignedInt(0)
+    }
 
     this.socket.emit('send', packet.raw)
   }

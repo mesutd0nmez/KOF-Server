@@ -9,7 +9,6 @@ import { clearTimeout } from 'timers'
 import { RateLimiterMemory } from 'rate-limiter-flexible'
 import express from 'express'
 import cors from 'cors'
-import lzf from 'lzf'
 import winston from 'winston'
 import winstonMongo from 'winston-mongodb'
 
@@ -19,6 +18,7 @@ import adminMiddleware from './middleware/admin.js'
 import authLoginRouter from './routes/auth/login.js'
 import adminPointerRouter from './routes/admin/pointer.js'
 import adminVersionRouter from './routes/admin/version.js'
+import adminLibraryRouter from './routes/admin/library.js'
 import adminUserRouter from './routes/admin/user.js'
 class Server extends EventEmitter {
   constructor(options) {
@@ -92,7 +92,7 @@ class Server extends EventEmitter {
   }
 
   async initializeSocket(socket) {
-    winston.info(`Socket: ${socket.remoteAddress}:${socket.remotePort}`)
+    winston.info(`Connection: ${socket.remoteAddress}:${socket.remotePort}`)
 
     if (this.socketIdCounter == 65535) {
       this.socketIdCounter = 0
@@ -138,17 +138,17 @@ class Server extends EventEmitter {
       )
     )
 
-    await Promise.all(this.eventPromises).then(async (moduleList) => {
-      moduleList.forEach(async (module) => {
+    await Promise.all(this.eventPromises).then((moduleList) => {
+      moduleList.forEach((module) => {
         const event = new module.default(this, socket)
 
         event.rateLimiter = new RateLimiterMemory(event.options.rateLimitOpts)
 
-        socket.recv.on(event.options.header, async (data) => {
+        socket.recv.on(event.options.header, (data) => {
           event.handleRecv(data)
         })
 
-        socket.send.on(event.options.header, async (...args) => {
+        socket.send.on(event.options.header, (...args) => {
           event.handleSend(...args)
         })
       })
@@ -179,8 +179,6 @@ class Server extends EventEmitter {
     socket.pingInterval = () => {
       socket.send.emit(PacketHeader.PING)
     }
-
-    socket.pingIntervalId = setInterval(socket.pingInterval, 15000)
   }
 
   async createServer() {
@@ -191,6 +189,10 @@ class Server extends EventEmitter {
 
     await this.buildEvents()
 
+    const result = await SessionModel.deleteMany({})
+
+    winston.info(`Server: Deleted ${result.deletedCount} old session data`)
+
     this.server = net.createServer((socket) => {
       //socket.setKeepAlive(true, 1800000)
       //socket.setNoDelay(true)
@@ -200,13 +202,13 @@ class Server extends EventEmitter {
       winston.info(`Server: Running on port - ${this.options.port}`)
     })
 
-    this.server.on('connection', async (socket) => {
+    this.server.on('connection', (socket) => {
       this.connectionRateLimiter
         .consume(socket.remoteAddress, 1)
-        .then(async () => {
+        .then(() => {
           this.initializeSocket(socket)
 
-          socket.on('data', async (data) => {
+          socket.on('data', (data) => {
             try {
               const startDelimeter = data.slice(0, 2)
 
@@ -215,7 +217,7 @@ class Server extends EventEmitter {
                 !startDelimeter.equals(Buffer.from([0x55, 0xaa]))
               ) {
                 winston.warn(
-                  'Process packet failed, packet not starting with 0xaa55, connection destroying',
+                  'Process packet failed, packet not starting with 0xaa55',
                   {
                     metadata: {
                       user: socket.user ? socket.user.id : null,
@@ -223,22 +225,7 @@ class Server extends EventEmitter {
                       processId: socket.processId,
                       crc: socket.fileCRC,
                       ip: socket.remoteAddress,
-                    },
-                  }
-                )
-                return
-              }
-
-              if (data.length < 10) {
-                winston.warn(
-                  'Process packet failed, packet size need minimum 9, connection destroying',
-                  {
-                    metadata: {
-                      user: socket.user ? socket.user.id : null,
-                      client: socket.client ? socket.client.id : null,
-                      processId: socket.processId,
-                      crc: socket.fileCRC,
-                      ip: socket.remoteAddress,
+                      packet: data.toString('hex'),
                     },
                   }
                 )
@@ -313,11 +300,9 @@ class Server extends EventEmitter {
               const size = decryptedPacket.readUnsignedInt()
 
               if (flag) {
-                const packetCommpressed = decryptedPacket.read()
-
-                const uncompressedPacket = lzf.decompress(packetCommpressed.raw)
-
-                decryptedPacket = new ByteBuffer(Array.from(uncompressedPacket))
+                //const packetCommpressed = decryptedPacket.read()
+                //const uncompressedPacket = lzf.decompress(packetCommpressed.raw)
+                //decryptedPacket = new ByteBuffer(Array.from(uncompressedPacket))
               }
 
               const packetHeader = decryptedPacket.readByte()
@@ -341,7 +326,7 @@ class Server extends EventEmitter {
             }
           })
 
-          socket.on('send', async (data, compress = false) => {
+          socket.on('send', (data, compress = false) => {
             try {
               const packet = new ByteBuffer()
 
@@ -351,14 +336,12 @@ class Server extends EventEmitter {
               const encryptionPacket = new ByteBuffer()
 
               //Packet
-              if (compress) {
-                encryptionPacket.writeUnsignedByte(1) //compression flag
-                encryptionPacket.writeUnsignedInt(data.length) //raw packet size
-
-                var compressedData = lzf.compress(data)
-
-                encryptionPacket.writeUnsignedInt(compressedData.length) //compressed packet size
-                encryptionPacket.write(compressedData) //compressed data
+              if (compress && data.length >= 512) {
+                //encryptionPacket.writeUnsignedByte(1) //compression flag
+                //encryptionPacket.writeUnsignedInt(data.length) //raw packet size
+                //var compressedData = lzf.compress(data)
+                //encryptionPacket.writeUnsignedInt(compressedData.length) //compressed packet size
+                //encryptionPacket.write(compressedData) //compressed data
               } else {
                 encryptionPacket.writeUnsignedByte(0) //compression flag
                 encryptionPacket.writeUnsignedInt(data.length) //raw packet size
@@ -411,12 +394,6 @@ class Server extends EventEmitter {
               if (socket.data) {
                 await SessionModel.findByIdAndDelete(socket.data.id)
               }
-
-              clearTimeout(socket.waitingReadyTimeoutId)
-              clearTimeout(socket.pingIntervalId)
-              socket.removeAllListeners()
-              socket.recv.removeAllListeners()
-              socket.send.removeAllListeners()
             } catch (error) {
               winston.error(error, {
                 metadata: {
@@ -428,6 +405,12 @@ class Server extends EventEmitter {
                 },
               })
             }
+
+            clearTimeout(socket.waitingReadyTimeoutId)
+            clearTimeout(socket.pingIntervalId)
+            socket.removeAllListeners()
+            socket.recv.removeAllListeners()
+            socket.send.removeAllListeners()
           })
 
           socket.on('error', async (error) => {
@@ -464,6 +447,12 @@ class Server extends EventEmitter {
                 },
               })
             }
+
+            clearTimeout(socket.waitingReadyTimeoutId)
+            clearTimeout(socket.pingIntervalId)
+            socket.removeAllListeners()
+            socket.recv.removeAllListeners()
+            socket.send.removeAllListeners()
           })
         })
         .catch(() => {
@@ -498,6 +487,7 @@ class Server extends EventEmitter {
     this.express.use('/auth/login', authLoginRouter)
     this.express.use('/admin/pointer', adminMiddleware, adminPointerRouter)
     this.express.use('/admin/version', adminMiddleware, adminVersionRouter)
+    this.express.use('/admin/library', adminMiddleware, adminLibraryRouter)
     this.express.use('/admin/user', adminMiddleware, adminUserRouter)
 
     this.express.listen(process.env.WEB_PORT, () => {

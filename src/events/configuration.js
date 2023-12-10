@@ -12,7 +12,7 @@ class Configuration extends Event {
       header: PacketHeader.CONFIGURATION,
       authorization: true,
       rateLimitOpts: {
-        points: 50,
+        points: 16,
         duration: 1, // Per second
       },
     })
@@ -64,7 +64,7 @@ class Configuration extends Event {
               )
 
               winston.info(
-                `Configuration: User default configuration created`,
+                `Configuration: ${characterName} - User default configuration created`,
                 {
                   metadata: {
                     user: this.socket.user ? this.socket.user.id : null,
@@ -99,15 +99,18 @@ class Configuration extends Event {
               })
             }
 
-            winston.info(`Configuration: User configuration loaded`, {
-              metadata: {
-                user: this.socket.user ? this.socket.user.id : null,
-                client: this.socket.client ? this.socket.client.id : null,
-                processId: this.socket.processId,
-                crc: this.socket.fileCRC,
-                ip: this.socket.remoteAddress,
-              },
-            })
+            winston.info(
+              `Configuration: ${characterName} - User configuration loaded`,
+              {
+                metadata: {
+                  user: this.socket.user ? this.socket.user.id : null,
+                  client: this.socket.client ? this.socket.client.id : null,
+                  processId: this.socket.processId,
+                  crc: this.socket.fileCRC,
+                  ip: this.socket.remoteAddress,
+                },
+              }
+            )
           }
 
           this.send(type, configurationData)
@@ -149,7 +152,7 @@ class Configuration extends Event {
             }).then(async (createdConfiguration) => {
               configurationCollection = createdConfiguration
               winston.info(
-                `Configuration: User default configuration created`,
+                `Configuration: ${characterName} - User default configuration created`,
                 {
                   metadata: {
                     user: this.socket.user ? this.socket.user.id : null,
@@ -168,15 +171,20 @@ class Configuration extends Event {
             configurationData.raw
           )
 
-          winston.info(`Configuration: User configuration saved`, {
-            metadata: {
-              user: this.socket.user ? this.socket.user.id : null,
-              client: this.socket.client ? this.socket.client.id : null,
-              processId: this.socket.processId,
-              crc: this.socket.fileCRC,
-              ip: this.socket.remoteAddress,
-            },
-          })
+          if (process.env.NODE_ENV == 'development') {
+            winston.info(
+              `Configuration: ${characterName} - User configuration saved`,
+              {
+                metadata: {
+                  user: this.socket.user ? this.socket.user.id : null,
+                  client: this.socket.client ? this.socket.client.id : null,
+                  processId: this.socket.processId,
+                  crc: this.socket.fileCRC,
+                  ip: this.socket.remoteAddress,
+                },
+              }
+            )
+          }
         }
         break
     }
@@ -193,7 +201,7 @@ class Configuration extends Event {
       packet.write(configuration)
     }
 
-    this.socket.emit('send', packet.raw, true)
+    this.socket.emit('send', packet.raw)
   }
 }
 

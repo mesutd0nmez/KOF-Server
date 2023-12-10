@@ -10,7 +10,7 @@ class Update extends Event {
       header: PacketHeader.UPDATE,
       authorization: true,
       rateLimitOpts: {
-        points: 50,
+        points: 16,
         duration: 1, // Per second
       },
     })

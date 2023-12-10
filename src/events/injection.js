@@ -11,7 +11,7 @@ class Injection extends Event {
       header: PacketHeader.INJECTION,
       authorization: true,
       rateLimitOpts: {
-        points: 50,
+        points: 16,
         duration: 1, // Per second
       },
     })
@@ -36,7 +36,7 @@ class Injection extends Event {
               {
                 try {
                   defaultLibrary = await fs.readFileSync(
-                    `./data/libraries/Pipeline.dll`
+                    `./data/libraries/Adapter.dll`
                   )
                 } catch (error) {
                   winston.error(error, {

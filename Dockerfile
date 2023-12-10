@@ -12,11 +12,11 @@ COPY package.json ./
 
 USER root
 
-RUN yarn global add pm2
-RUN yarn install
+RUN npm install -g pm2
+RUN npm install
 
 COPY . .
 
 EXPOSE 8888
 
-CMD ["yarn", "start"]
+CMD ["npm", "start"]

@@ -12,7 +12,7 @@ class Ready extends Event {
       header: PacketHeader.READY,
       authorization: false,
       rateLimitOpts: {
-        points: 50,
+        points: 16,
         duration: 1, // Per second
       },
     })
@@ -28,7 +28,7 @@ class Ready extends Event {
 
     if (process.env.NODE_ENV != 'development') {
       if (!versionInfo) {
-        winston.warn(`Possible file integrity activity suspicion`, {
+        winston.warn(`Possible file integrity activity`, {
           metadata: {
             processId: this.socket.processId,
             crc: this.socket.fileCRC,
@@ -67,6 +67,21 @@ class Ready extends Event {
         ip: this.socket.remoteAddress,
       },
     })
+
+    if (this.socket.pingIntervalId != 0) {
+      winston.error(
+        `Socket ready, but pingIntervalId is already working this means socket ready packet is sent more than once may be a software error`,
+        {
+          metadata: {
+            processId: this.socket.processId,
+            crc: this.socket.fileCRC,
+            ip: this.socket.remoteAddress,
+          },
+        }
+      )
+    } else {
+      this.socket.pingIntervalId = setInterval(this.socket.pingInterval, 30000)
+    }
   }
 
   async send() {

@@ -1,8 +1,9 @@
 import PacketHeader from '../core/enums/packetHeader.js'
 import Event from '../core/event.js'
 import { ByteBuffer } from '../utils/byteBuffer.js'
+import createBitmapFile from '../utils/bitmap.js'
 import axios from 'axios'
-import sharp from 'sharp'
+import Jimp from 'jimp'
 import winston from 'winston'
 
 class Captcha extends Event {
@@ -11,7 +12,7 @@ class Captcha extends Event {
       header: PacketHeader.CAPTCHA,
       authorization: true,
       rateLimitOpts: {
-        points: 50,
+        points: 16,
         duration: 1, // Per second
       },
     })
@@ -19,48 +20,53 @@ class Captcha extends Event {
 
   async recv(packet) {
     const imageBufferLength = packet.readUnsignedInt()
-    const imageOriginalLength = packet.readUnsignedInt()
-    const imageOriginalBuffer = packet.read(imageBufferLength - 8)
+    const imageOriginalBuffer = packet.read()
 
-    sharp(imageOriginalBuffer.raw, {
-      raw: { width: 256, height: 64, channels: 3 },
+    const captchaImage = await createBitmapFile({
+      imageData: imageOriginalBuffer.toArray(),
     })
-      .toFormat('png')
-      .flip(true) //IDK
-      .toBuffer()
-      .then((jpegBuffer) => {
-        axios
-          .post(
-            process.env.TRUECAPTCHA_API_URL,
-            {
-              userid: process.env.TRUECAPTCHA_API_USER,
-              apikey: process.env.TRUECAPTCHA_API_KEY,
-              data: jpegBuffer.toString('base64'),
-              len_str: 4,
-              numeric: false,
-              case: 'mixed',
-            },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            }
-          )
-          .then((response) => {
-            if (response.data && response.data.success) {
-              return this.send(1, response.data.result)
-            } else {
-              return this.send(0, '0000')
-            }
+
+    Jimp.read(captchaImage)
+      .then((image) => {
+        image
+          .getBufferAsync(Jimp.MIME_PNG)
+          .then((image) => {
+            axios
+              .post(
+                process.env.TRUECAPTCHA_API_URL,
+                {
+                  userid: process.env.TRUECAPTCHA_API_USER,
+                  apikey: process.env.TRUECAPTCHA_API_KEY,
+                  data: image.toString('base64'),
+                  len_str: 4,
+                  numeric: false,
+                  case: 'mixed',
+                },
+                {
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                }
+              )
+              .then((response) => {
+                if (response.data && response.data.success) {
+                  return this.send(1, response.data.result)
+                } else {
+                  winston.error('Captcha API invalid response', {
+                    metadata: response,
+                  })
+                }
+              })
+              .catch((error) => {
+                winston.error(error)
+              })
           })
-          .catch((error) => {
-            winston.error(error)
-            return this.send(0, '0000')
+          .catch((err) => {
+            winston.error(err)
           })
       })
       .catch((error) => {
         winston.error(error)
-        return this.send(0, '0000')
       })
   }
 

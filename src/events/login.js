@@ -17,7 +17,7 @@ class Login extends Event {
       header: PacketHeader.LOGIN,
       authorization: false,
       rateLimitOpts: {
-        points: 50,
+        points: 16,
         duration: 1, // Per second
       },
     })
@@ -39,10 +39,6 @@ class Login extends Event {
 
           if (!email || !password) return
 
-          if (process.env.NODE_ENV !== 'development') {
-            if (email === 'me@kofbot.com') return
-          }
-
           if (!validator.isEmail(email)) {
             winston.warn(`Login: ${email} - is not valid email`, {
               metadata: {
@@ -53,7 +49,12 @@ class Login extends Event {
                 ip: socket.remoteAddress,
               },
             })
-            return
+
+            return this.send({
+              type: type,
+              status: 0,
+              message: 'Aktivasyon bilgileri hatali',
+            })
           }
 
           clientHardwareInfo.systemName = packet.readString(true)
@@ -75,7 +76,11 @@ class Login extends Event {
                   ip: socket.remoteAddress,
                 },
               })
-              statusMessage = 'Aktivasyon bilgileri hatali'
+              return this.send({
+                type: type,
+                status: 0,
+                message: 'Aktivasyon bilgileri hatali',
+              })
             }
           } else {
             if (process.env.AUTO_REGISTRATION == 1) {
@@ -124,7 +129,12 @@ class Login extends Event {
                   ip: socket.remoteAddress,
                 },
               })
-              statusMessage = 'Aktivasyon basarisiz'
+
+              return this.send({
+                type: type,
+                status: 0,
+                message: 'Aktivasyon basarisiz',
+              })
             }
           }
         }
@@ -153,7 +163,12 @@ class Login extends Event {
                 ip: socket.remoteAddress,
               },
             })
-            statusMessage = 'Aktivasyon basarisiz'
+
+            return this.send({
+              type: type,
+              status: 0,
+              message: 'Aktivasyon basarisiz',
+            })
           }
         } catch (err) {
           winston.error(err, {
@@ -166,22 +181,17 @@ class Login extends Event {
             },
           })
           socket.user = null
-          statusMessage = 'Aktivasyon basarisiz'
+
+          return this.send({
+            type: type,
+            status: 0,
+            message: 'Aktivasyon basarisiz',
+          })
         }
         break
     }
 
     if (socket.user) {
-      winston.info(`Login: ${socket.user.email} - logging in`, {
-        metadata: {
-          user: socket.user ? socket.user.id : null,
-          client: socket.client ? socket.client.id : null,
-          processId: socket.processId,
-          crc: socket.fileCRC,
-          ip: socket.remoteAddress,
-        },
-      })
-
       socket.user.updatedAt = Date.now()
       socket.user.save()
 
@@ -324,79 +334,48 @@ class Login extends Event {
       )
 
       switch (type) {
-        case LoginType.GENERIC: {
-          winston.info(`Login: ${socket.user.email} - signing session token`, {
-            metadata: {
-              user: socket.user ? socket.user.id : null,
-              client: socket.client ? socket.client.id : null,
-              processId: socket.processId,
-              crc: socket.fileCRC,
-              ip: socket.remoteAddress,
-            },
-          })
+        case LoginType.GENERIC:
+          {
+            token = jwt.sign(
+              { userId: socket.user._id },
+              process.env.TOKEN_KEY,
+              {
+                expiresIn: '365d',
+              }
+            )
 
-          token = jwt.sign({ userId: socket.user._id }, process.env.TOKEN_KEY, {
-            expiresIn: '365d',
-          })
-
-          winston.info(
-            `Login: ${socket.user.email} - session token signed, sending to client`,
-            {
-              metadata: {
-                user: socket.user ? socket.user.id : null,
-                client: socket.client ? socket.client.id : null,
-                processId: socket.processId,
-                crc: socket.fileCRC,
-                ip: socket.remoteAddress,
-              },
-            }
-          )
-
-          this.socket.token = token
-
-          let versionInfo = await VersionModel.findOne({
-            status: 1,
-            crc: this.socket.fileCRC,
-          })
-
-          if (versionInfo) {
-            return this.send({ type: type, status: 1, token: token })
-          } else {
-            return this.send({ type: type, status: 2, token: token })
+            this.socket.token = token
           }
-        }
+          break
 
-        case LoginType.TOKEN: {
-          winston.info(
-            `Login: ${socket.user.email} - token validation success, user authorized`,
-            {
-              metadata: {
-                user: socket.user ? socket.user.id : null,
-                client: socket.client ? socket.client.id : null,
-                processId: socket.processId,
-                crc: socket.fileCRC,
-                ip: socket.remoteAddress,
-              },
-            }
-          )
-
-          this.socket.token = token
-
-          let versionInfo = await VersionModel.findOne({
-            status: 1,
-            crc: this.socket.fileCRC,
-          })
-
-          if (versionInfo) {
-            return this.send({ type: type, status: 1, token: token })
-          } else {
-            return this.send({ type: type, status: 2, token: token })
+        case LoginType.TOKEN:
+          {
+            this.socket.token = token
           }
-        }
+          break
+      }
+
+      let versionInfo = await VersionModel.findOne({
+        status: 1,
+        crc: this.socket.fileCRC,
+      })
+
+      if (versionInfo) {
+        return this.send({
+          type: type,
+          status: 1,
+          token: token,
+          subscriptionEndAt: socket.user.subscriptionEndAt.getTime(),
+        })
+      } else {
+        return this.send({
+          type: type,
+          status: 2,
+          token: token,
+          subscriptionEndAt: socket.user.subscriptionEndAt.getTime(),
+        })
       }
     }
-
-    this.send({ type: type, status: 0, message: statusMessage })
   }
 
   async send({
@@ -404,6 +383,7 @@ class Login extends Event {
     status = 0,
     token = '',
     message = '',
+    subscriptionEndAt = 0,
   }) {
     const packet = new ByteBuffer()
 
@@ -418,6 +398,7 @@ class Login extends Event {
 
     if (status == 1 || status == 2) {
       packet.writeString(token, true)
+      packet.writeUnsignedInt(subscriptionEndAt / 1000)
     }
 
     this.socket.emit('send', packet.raw)
