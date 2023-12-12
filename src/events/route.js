@@ -31,6 +31,12 @@ class Route extends Event {
         case 0: //Load
           {
             try {
+              await fs.access(userRoutePath, fs.constants.F_OK, async (err) => {
+                if (err) {
+                  await fs.mkdir(userRoutePath, (err) => {})
+                }
+              })
+
               const files = await fs.readdirSync(userRoutePath)
               const routeFiles = await files.filter((file) =>
                 file.endsWith('.json')
