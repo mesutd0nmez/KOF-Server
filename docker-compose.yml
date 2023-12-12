@@ -5,6 +5,7 @@ services:
     build: .
     ports:
       - '${PORT}:${PORT}'
+      - '${WEB_PORT}:${WEB_PORT}'
     depends_on:
       - database
     volumes:

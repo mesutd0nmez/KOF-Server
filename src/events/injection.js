@@ -4,14 +4,14 @@ import Event from '../core/event.js'
 import fs from 'fs'
 import PlatformType from '../core/enums/platformType.js'
 import InjectionRequestType from '../core/enums/injectionRequestType.js'
-
+import winston from 'winston'
 class Injection extends Event {
   constructor(server, socket) {
     super(server, socket, {
       header: PacketHeader.INJECTION,
       authorization: true,
       rateLimitOpts: {
-        points: 5,
+        points: 16,
         duration: 1, // Per second
       },
     })
@@ -36,21 +36,46 @@ class Injection extends Event {
               {
                 try {
                   defaultLibrary = await fs.readFileSync(
-                    `./data/libraries/Pipeline.dll`
+                    `./data/libraries/Adapter.dll`
                   )
                 } catch (error) {
-                  console.info(error)
+                  winston.error(error, {
+                    metadata: {
+                      user: this.socket.user ? this.socket.user.id : null,
+                      client: this.socket.client ? this.socket.client.id : null,
+                      processId: this.socket.processId,
+                      crc: this.socket.fileCRC,
+                      ip: this.socket.remoteAddress,
+                    },
+                  })
                 }
               }
               break
           }
 
           if (defaultLibrary) {
-            console.info(`Injection: Library to be injected has been sent`)
+            winston.info(`Injection: Library to be injected has been sent`, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
             this.send(processId, defaultLibrary, defaultLibrary.length)
           } else {
-            console.info(
-              `Injection: Unable to injection due to technical problem`
+            winston.info(
+              `Injection: Unable to injection due to technical problem`,
+              {
+                metadata: {
+                  user: this.socket.user ? this.socket.user.id : null,
+                  client: this.socket.client ? this.socket.client.id : null,
+                  processId: this.socket.processId,
+                  crc: this.socket.fileCRC,
+                  ip: this.socket.remoteAddress,
+                },
+              }
             )
           }
         }
@@ -61,9 +86,25 @@ class Injection extends Event {
           const processId = packet.readUnsignedInt()
 
           if (started != 0) {
-            console.info(`Injection: pid(${processId}) completed`)
+            winston.info(`Injection: pid(${processId}) completed`, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
           } else {
-            console.info(`Injection: pid(${processId}) failed`)
+            winston.info(`Injection: pid(${processId}) failed`, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
           }
         }
         break
@@ -79,7 +120,7 @@ class Injection extends Event {
     packet.writeUnsignedInt(bufferLength)
     packet.write(buffer)
 
-    this.socket.emit('send', packet.raw, true)
+    this.socket.emit('send', packet.raw)
   }
 }
 

@@ -3,7 +3,8 @@ import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
 import fs from 'fs'
 import PlatformType from '../core/enums/platformType.js'
-import AppType from '../core/enums/appType.js'
+import SessionModel from '../models/session.js'
+import winston from 'winston'
 
 class Injection extends Event {
   constructor(server, socket) {
@@ -11,91 +12,130 @@ class Injection extends Event {
       header: PacketHeader.POINTER,
       authorization: true,
       rateLimitOpts: {
-        points: 5,
+        points: 16,
         duration: 1, // Per second
       },
     })
   }
 
   async recv(packet) {
-    const appType = packet.readUnsignedByte()
-
     let defaultPointerFile = null
 
-    switch (appType) {
-      case AppType.LOADER:
+    const platform = packet.readUnsignedByte()
+
+    this.socket.data = await SessionModel.findOneAndUpdate(
+      { _id: this.socket.data.id },
+      {
+        $set: {
+          platform: platform,
+        },
+      },
+      { new: true }
+    )
+
+    switch (platform) {
+      case PlatformType.USKO:
         {
           try {
             defaultPointerFile = await fs.readFileSync(
-              `./data/pointers/loader.ini`
+              `./data/pointers/usko.ini`
             )
           } catch (error) {
-            console.info(error)
+            winston.error(error, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
           }
         }
         break
-      case AppType.BOT:
+
+      case PlatformType.CNKO:
         {
-          const platform = packet.readUnsignedByte()
+          try {
+            defaultPointerFile = await fs.readFileSync(
+              `./data/pointers/cnko.ini`
+            )
+          } catch (error) {
+            winston.error(error, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
+          }
+        }
+        break
 
-          switch (platform) {
-            case PlatformType.USKO:
-              {
-                try {
-                  defaultPointerFile = await fs.readFileSync(
-                    `./data/pointers/usko.ini`
-                  )
-                } catch (error) {
-                  console.info(error)
-                }
-              }
-              break
+      case PlatformType.KOKO:
+        {
+          try {
+            defaultPointerFile = await fs.readFileSync(
+              `./data/pointers/koko.ini`
+            )
+          } catch (error) {
+            winston.error(error, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
+          }
+        }
+        break
 
-            case PlatformType.CNKO:
-              {
-                try {
-                  defaultPointerFile = await fs.readFileSync(
-                    `./data/pointers/cnko.ini`
-                  )
-                } catch (error) {
-                  console.info(error)
-                }
-              }
-              break
-
-            case PlatformType.KOKO:
-              {
-                try {
-                  defaultPointerFile = await fs.readFileSync(
-                    `./data/pointers/koko.ini`
-                  )
-                } catch (error) {
-                  console.info(error)
-                }
-              }
-              break
-
-            case PlatformType.STKO:
-              {
-                try {
-                  defaultPointerFile = await fs.readFileSync(
-                    `./data/pointers/stko.ini`
-                  )
-                } catch (error) {
-                  console.info(error)
-                }
-              }
-              break
+      case PlatformType.STKO:
+        {
+          try {
+            defaultPointerFile = await fs.readFileSync(
+              `./data/pointers/stko.ini`
+            )
+          } catch (error) {
+            winston.error(error, {
+              metadata: {
+                user: this.socket.user ? this.socket.user.id : null,
+                client: this.socket.client ? this.socket.client.id : null,
+                processId: this.socket.processId,
+                crc: this.socket.fileCRC,
+                ip: this.socket.remoteAddress,
+              },
+            })
           }
         }
         break
     }
 
     if (defaultPointerFile) {
-      console.info(`Pointer: List sended`)
+      winston.info(`Pointer: List sended`, {
+        metadata: {
+          user: this.socket.user ? this.socket.user.id : null,
+          client: this.socket.client ? this.socket.client.id : null,
+          processId: this.socket.processId,
+          crc: this.socket.fileCRC,
+          ip: this.socket.remoteAddress,
+        },
+      })
       this.send(defaultPointerFile, defaultPointerFile.length)
     } else {
-      console.info(`Pointer: Unable to send pointer due to technical problem`)
+      winston.info(`Pointer: Unable to send pointer due to technical problem`, {
+        metadata: {
+          user: this.socket.user ? this.socket.user.id : null,
+          client: this.socket.client ? this.socket.client.id : null,
+          processId: this.socket.processId,
+          crc: this.socket.fileCRC,
+          ip: this.socket.remoteAddress,
+        },
+      })
     }
   }
 
@@ -107,7 +147,7 @@ class Injection extends Event {
     packet.writeUnsignedInt(bufferLength)
     packet.write(buffer)
 
-    this.socket.emit('send', packet.raw, true)
+    this.socket.emit('send', packet.raw)
   }
 }
 

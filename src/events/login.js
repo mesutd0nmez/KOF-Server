@@ -7,6 +7,9 @@ import ClientModel from '../models/client.js'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import validator from 'validator'
+import SessionModel from '../models/session.js'
+import VersionModel from '../models/version.js'
+import winston from 'winston'
 
 class Login extends Event {
   constructor(server, socket) {
@@ -14,7 +17,7 @@ class Login extends Event {
       header: PacketHeader.LOGIN,
       authorization: false,
       rateLimitOpts: {
-        points: 5,
+        points: 16,
         duration: 1, // Per second
       },
     })
@@ -26,6 +29,7 @@ class Login extends Event {
     let token = null
     let clientHardwareInfo = {}
     let socket = this.socket
+    let statusMessage = 'Bilinmeyen Hata'
 
     switch (type) {
       case LoginType.GENERIC:
@@ -35,22 +39,27 @@ class Login extends Event {
 
           if (!email || !password) return
 
-          if (process.env.NODE_ENV !== 'development') {
-            if (email === 'me@kofbot.com') return
-          }
-
           if (!validator.isEmail(email)) {
-            console.info(`Login: ${email} - is not valid email`)
-            return
+            winston.warn(`Login: ${email} - is not valid email`, {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            })
+
+            return this.send({
+              type: type,
+              status: 0,
+              message: 'Aktivasyon bilgileri hatali',
+            })
           }
 
           clientHardwareInfo.systemName = packet.readString(true)
-          clientHardwareInfo.processorId = packet.readString(true)
-          clientHardwareInfo.baseBoardSerial = packet.readString(true)
-          clientHardwareInfo.hddSerial = packet.readString(true)
           clientHardwareInfo.uuid = packet.readString(true)
           clientHardwareInfo.systemSerialNumber = packet.readString(true)
-          clientHardwareInfo.partNumber = packet.readString(true)
           clientHardwareInfo.gpu = packet.readString(true)
 
           socket.user = await UserModel.findOne({ email: email })
@@ -58,25 +67,74 @@ class Login extends Event {
           if (socket.user) {
             if (!(await bcrypt.compare(password, socket.user.password))) {
               socket.user = null
-              console.info(`Login: ${email} - password does not match`)
+              winston.warn(`Login: ${email} - password does not match`, {
+                metadata: {
+                  user: socket.user ? socket.user.id : null,
+                  client: socket.client ? socket.client.id : null,
+                  processId: socket.processId,
+                  crc: socket.fileCRC,
+                  ip: socket.remoteAddress,
+                },
+              })
+              return this.send({
+                type: type,
+                status: 0,
+                message: 'Aktivasyon bilgileri hatali',
+              })
             }
           } else {
             if (process.env.AUTO_REGISTRATION == 1) {
-              console.info(
-                `Login: ${email} - not found, auto registration in progress`
+              winston.warn(
+                `Login: ${email} - not found, auto registration in progress`,
+                {
+                  metadata: {
+                    user: socket.user ? socket.user.id : null,
+                    client: socket.client ? socket.client.id : null,
+                    processId: socket.processId,
+                    crc: socket.fileCRC,
+                    ip: socket.remoteAddress,
+                  },
+                }
               )
 
               const hashedPassword = await bcrypt.hash(password, 10)
 
+              const today = new Date()
+              const futureDate = new Date()
+              futureDate.setDate(today.getDate() + 3)
+
               await UserModel.create({
                 email: email,
                 password: hashedPassword,
+                subscriptionEndAt: futureDate,
               }).then((createdUser) => {
                 socket.user = createdUser
-                console.info(`Login: ${createdUser.email} - created`)
+                winston.info(`Login: ${createdUser.email} - created`, {
+                  metadata: {
+                    user: socket.user ? socket.user.id : null,
+                    client: socket.client ? socket.client.id : null,
+                    processId: socket.processId,
+                    crc: socket.fileCRC,
+                    ip: socket.remoteAddress,
+                  },
+                })
               })
             } else {
-              console.info(`Login: ${email} - not found`)
+              winston.warn(`Login: ${email} - not found`, {
+                metadata: {
+                  user: socket.user ? socket.user.id : null,
+                  client: socket.client ? socket.client.id : null,
+                  processId: socket.processId,
+                  crc: socket.fileCRC,
+                  ip: socket.remoteAddress,
+                },
+              })
+
+              return this.send({
+                type: type,
+                status: 0,
+                message: 'Aktivasyon basarisiz',
+              })
             }
           }
         }
@@ -88,109 +146,245 @@ class Login extends Event {
           if (!token) return
 
           clientHardwareInfo.systemName = packet.readString(true)
-          clientHardwareInfo.processorId = packet.readString(true)
-          clientHardwareInfo.baseBoardSerial = packet.readString(true)
-          clientHardwareInfo.hddSerial = packet.readString(true)
           clientHardwareInfo.uuid = packet.readString(true)
           clientHardwareInfo.systemSerialNumber = packet.readString(true)
-          clientHardwareInfo.partNumber = packet.readString(true)
           clientHardwareInfo.gpu = packet.readString(true)
 
           const decoded = jwt.verify(token, process.env.TOKEN_KEY)
           socket.user = await UserModel.findOne({ _id: decoded.userId })
 
           if (!socket.user) {
-            console.info(`Login: There is no user with this token`)
+            winston.warn(`Login: There is no user with this token`, {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            })
+
+            return this.send({
+              type: type,
+              status: 0,
+              message: 'Aktivasyon basarisiz',
+            })
           }
         } catch (err) {
-          console.info(err)
+          winston.error(err, {
+            metadata: {
+              user: socket.user ? socket.user.id : null,
+              client: socket.client ? socket.client.id : null,
+              processId: socket.processId,
+              crc: socket.fileCRC,
+              ip: socket.remoteAddress,
+            },
+          })
           socket.user = null
-          console.info(`Login: Invalid token`)
+
+          return this.send({
+            type: type,
+            status: 0,
+            message: 'Aktivasyon basarisiz',
+          })
         }
         break
     }
 
     if (socket.user) {
-      console.info(`Login: ${socket.user.email} - logging in`)
+      socket.user.updatedAt = Date.now()
+      socket.user.save()
 
-      const findedClient = await ClientModel.findOne({
+      const today = new Date()
+      const subscriptionEndAt = new Date(socket.user.subscriptionEndAt)
+
+      if (today > subscriptionEndAt) {
+        winston.warn(
+          `Login: ${socket.user.email} - Account has subscription time end`,
+          {
+            metadata: {
+              user: socket.user ? socket.user.id : null,
+              client: socket.client ? socket.client.id : null,
+              processId: socket.processId,
+              crc: socket.fileCRC,
+              ip: socket.remoteAddress,
+            },
+          }
+        )
+
+        return this.send({
+          type: type,
+          status: 0,
+          message: 'Abonelik sureniz doldu',
+        })
+      }
+
+      let findedClient = await ClientModel.findOne({
         systemName: clientHardwareInfo.systemName,
-        processorId: clientHardwareInfo.processorId,
-        baseBoardSerial: clientHardwareInfo.baseBoardSerial,
-        hddSerial: clientHardwareInfo.hddSerial,
         uuid: clientHardwareInfo.uuid,
         systemSerialNumber: clientHardwareInfo.systemSerialNumber,
-        partNumber: clientHardwareInfo.partNumber,
         gpu: clientHardwareInfo.gpu,
       })
 
       if (!findedClient) {
+        if (socket.user.credit == 0) {
+          winston.warn(
+            `Login: ${socket.user.email} - Account has no credit limit for create new client`,
+            {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            }
+          )
+
+          return this.send({
+            type: type,
+            status: 0,
+            message: 'Aktivasyon icin yeterli kredi yok',
+          })
+        }
+
         await ClientModel.create({
           userId: socket.user._id,
           systemName: clientHardwareInfo.systemName,
-          processorId: clientHardwareInfo.processorId,
-          baseBoardSerial: clientHardwareInfo.baseBoardSerial,
-          hddSerial: clientHardwareInfo.hddSerial,
           uuid: clientHardwareInfo.uuid,
           systemSerialNumber: clientHardwareInfo.systemSerialNumber,
-          partNumber: clientHardwareInfo.partNumber,
           gpu: clientHardwareInfo.gpu,
           ip: socket.remoteAddress,
-        }).then((client) => {
+        }).then(async (client) => {
           socket.client = client
-          console.info(
-            `Login: ${socket.user.email} - client ${client._id} created`
+
+          socket.data.clientId = socket.client.id
+          await socket.data.save()
+
+          if (socket.user.credit != -1) {
+            socket.user.credit--
+            socket.user.save()
+          }
+
+          winston.info(
+            `Login: ${socket.user.email} - client ${client._id} created`,
+            {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            }
           )
         })
       } else {
-        if (!socket.user._id.equals(findedClient.userId)) {
-          console.info(
-            `Login: ${socket.user.email} - client ${findedClient._id} registered another user (${findedClient.userId} != ${socket.user._id}), socket destroying`
+        if (!socket.user._id.equals(socket.user.id)) {
+          winston.warn(
+            `Login: ${socket.user.email} - client ${findedClient._id} registered another user (${findedClient.userId} != ${socket.user._id})`,
+            {
+              metadata: {
+                user: socket.user ? socket.user.id : null,
+                client: socket.client ? socket.client.id : null,
+                processId: socket.processId,
+                crc: socket.fileCRC,
+                ip: socket.remoteAddress,
+              },
+            }
           )
 
-          return socket.destroy()
+          return this.send({
+            type: type,
+            status: 0,
+            message: 'Daha once aktivasyon yapildi',
+          })
         }
 
         findedClient.ip = socket.remoteAddress
+        findedClient.updatedAt = Date.now()
 
         await findedClient.save()
 
         socket.client = findedClient
 
-        console.info(
-          `Login: ${socket.user.email} - client ${socket.client._id}`
+        winston.info(
+          `Login: ${socket.user.email} - client ${socket.client._id}`,
+          {
+            metadata: {
+              user: socket.user ? socket.user.id : null,
+              client: socket.client ? socket.client.id : null,
+              processId: socket.processId,
+              crc: socket.fileCRC,
+              ip: socket.remoteAddress,
+            },
+          }
         )
       }
 
+      this.socket.data = await SessionModel.findOneAndUpdate(
+        { _id: this.socket.data.id },
+        {
+          $set: {
+            userId: socket.user.id,
+            clientId: socket.client.id,
+          },
+        },
+        { new: true }
+      )
+
       switch (type) {
-        case LoginType.GENERIC: {
-          console.info(`Login: ${socket.user.email} - signing session token`)
+        case LoginType.GENERIC:
+          {
+            token = jwt.sign(
+              { userId: socket.user._id },
+              process.env.TOKEN_KEY,
+              {
+                expiresIn: '365d',
+              }
+            )
 
-          token = jwt.sign({ userId: socket.user._id }, process.env.TOKEN_KEY, {
-            expiresIn: '365d',
-          })
+            this.socket.token = token
+          }
+          break
 
-          console.info(
-            `Login: ${socket.user.email} - session token signed, sending to client`
-          )
-          this.socket.token = token
-          return this.send(type, 1, token)
-        }
+        case LoginType.TOKEN:
+          {
+            this.socket.token = token
+          }
+          break
+      }
 
-        case LoginType.TOKEN: {
-          console.info(
-            `Login: ${socket.user.email} - token validation success, user authorized`
-          )
-          this.socket.token = token
-          return this.send(type, 1)
-        }
+      let versionInfo = await VersionModel.findOne({
+        status: 1,
+        crc: this.socket.fileCRC,
+      })
+
+      if (versionInfo) {
+        return this.send({
+          type: type,
+          status: 1,
+          token: token,
+          subscriptionEndAt: socket.user.subscriptionEndAt.getTime(),
+        })
+      } else {
+        return this.send({
+          type: type,
+          status: 2,
+          token: token,
+          subscriptionEndAt: socket.user.subscriptionEndAt.getTime(),
+        })
       }
     }
-
-    this.send(type, 0)
   }
 
-  async send(type, status, token = '') {
+  async send({
+    type = LoginType.GENERIC,
+    status = 0,
+    token = '',
+    message = '',
+    subscriptionEndAt = 0,
+  }) {
     const packet = new ByteBuffer()
 
     packet.writeUnsignedByte(this.options.header)
@@ -198,12 +392,13 @@ class Login extends Event {
     packet.writeUnsignedByte(type)
     packet.writeUnsignedByte(status)
 
-    if (status == 1) {
-      packet.writeUnsignedInt(this.socket.user.type)
+    if (status == 0) {
+      packet.writeString(message, true)
     }
 
-    if (token != '') {
+    if (status == 1 || status == 2) {
       packet.writeString(token, true)
+      packet.writeUnsignedInt(subscriptionEndAt / 1000)
     }
 
     this.socket.emit('send', packet.raw)

@@ -1,5 +1,5 @@
 {
-  "name": "KOF-Server",
+  "name": "kof-server",
   "version": "1.0.0",
   "main": "index.js",
   "repository": "https://github.com/trkyshorty/KOF-Server.git",
@@ -17,34 +17,48 @@
     "prettier:fix": "prettier --write index.js ./src/**/*.js"
   },
   "dependencies": {
+    "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
     "byte-buffer": "https://github.com/trkyshorty/byte-buffer#build",
+    "cors": "^2.8.5",
     "crypto": "^1.0.1",
-    "dotenv": "^16.0.3",
+    "dotenv": "^16.3.1",
     "events": "^3.3.0",
+    "express": "^4.18.2",
     "fs": "^0.0.1-security",
-    "glob": "^8.1.0",
+    "glob": "^10.3.10",
     "iconv-lite": "^0.6.3",
-    "jsonwebtoken": "^9.0.0",
-    "mongoose": "^6.9.1",
+    "jimp": "^0.22.10",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.1",
+    "multer": "^1.4.5-lts.1",
     "net": "^1.0.2",
     "path": "^0.12.7",
-    "rate-limiter-flexible": "^2.4.1",
-    "snappy": "^7.2.2",
-    "validator": "^13.9.0"
+    "rate-limiter-flexible": "^3.0.4",
+    "validator": "^13.11.0",
+    "winston": "^3.11.0",
+    "winston-mongodb": "^5.1.1"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "eslint": "^8.34.0",
-    "eslint-config-prettier": "^8.6.0",
-    "eslint-plugin-prettier": "^4.2.1",
-    "prettier": "^2.8.4"
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.1",
+    "prettier": "^3.1.0"
   },
   "type": "module",
   "plugins": [
     "import"
   ],
   "rules": {
+    "no-unused-vars": [
+      "error",
+      {
+        "vars": "all",
+        "args": "after-used",
+        "ignoreRestSiblings": false
+      }
+    ],
     "import/no-unresolved": 2,
     "import/no-commonjs": 2,
     "import/extensions": [
