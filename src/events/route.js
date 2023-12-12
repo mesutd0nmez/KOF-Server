@@ -23,7 +23,7 @@ class Route extends Event {
         return
       }
 
-      const userRoutePath = `./data/routes/${this.socket.user.id}/`
+      const userRoutePath = `./data/routes/${this.socket.user.id}`
 
       const type = packet.readUnsignedByte()
 
