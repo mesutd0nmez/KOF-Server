@@ -26,11 +26,6 @@
 >{{url}}/admin/users?email=
 >```
 >
-### Body formdata
-
-|Param|value|Type|
-|---|---|---|
-
 ### Query Params
 
 |Param|value|
