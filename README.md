@@ -1,6 +1,6 @@
 # KOF-Server
 
-This project is the server of KOF-Bot, and licensing, anti-cracking report, automatic updating, user/client management and management of KnightOnline.exe addresses are done through the server
+This project is the server of [KOF-Bot](https://github.com/trkyshorty/KOF-Bot), and licensing, anti-cracking report, automatic updating, user/client management and management of KnightOnline.exe addresses are done through the server
 
 To use KOF-Server, you need to have Docker installed
 
