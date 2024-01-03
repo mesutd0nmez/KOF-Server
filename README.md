@@ -21,7 +21,7 @@ After completing the necessary requirements, you can start the KOF-Server
 
 - Docker
 
-- ## Encryption
+## Encryption
 
 KOF-Server utilizes **AES-256 CBC** encryption, and the keys for this encryption are configured through the **.env** file.
 
