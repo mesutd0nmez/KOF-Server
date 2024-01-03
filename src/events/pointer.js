@@ -3,8 +3,6 @@ import { ByteBuffer } from '../utils/byteBuffer.js'
 import Event from '../core/event.js'
 import fs from 'fs'
 import PlatformType from '../core/enums/platformType.js'
-import SessionModel from '../models/session.js'
-import winston from 'winston'
 
 class Injection extends Event {
   constructor(server, socket) {
@@ -12,129 +10,68 @@ class Injection extends Event {
       header: PacketHeader.POINTER,
       authorization: true,
       rateLimitOpts: {
-        points: 16,
+        points: 8,
         duration: 1, // Per second
       },
     })
   }
 
   async recv(packet) {
-    let defaultPointerFile = null
+    try {
+      let defaultPointerFile = null
 
-    const platform = packet.readUnsignedByte()
+      const platform = packet.readUnsignedByte()
 
-    this.socket.data = await SessionModel.findOneAndUpdate(
-      { _id: this.socket.data.id },
-      {
-        $set: {
-          platform: platform,
-        },
-      },
-      { new: true }
-    )
-
-    switch (platform) {
-      case PlatformType.USKO:
-        {
-          try {
+      switch (platform) {
+        case PlatformType.USKO:
+          {
             defaultPointerFile = await fs.readFileSync(
               `./data/pointers/usko.ini`
             )
-          } catch (error) {
-            winston.error(error, {
-              metadata: {
-                user: this.socket.user ? this.socket.user.id : null,
-                client: this.socket.client ? this.socket.client.id : null,
-                processId: this.socket.processId,
-                crc: this.socket.fileCRC,
-                ip: this.socket.remoteAddress,
-              },
-            })
           }
-        }
-        break
+          break
 
-      case PlatformType.CNKO:
-        {
-          try {
+        case PlatformType.CNKO:
+          {
             defaultPointerFile = await fs.readFileSync(
               `./data/pointers/cnko.ini`
             )
-          } catch (error) {
-            winston.error(error, {
-              metadata: {
-                user: this.socket.user ? this.socket.user.id : null,
-                client: this.socket.client ? this.socket.client.id : null,
-                processId: this.socket.processId,
-                crc: this.socket.fileCRC,
-                ip: this.socket.remoteAddress,
-              },
-            })
           }
-        }
-        break
+          break
 
-      case PlatformType.KOKO:
-        {
-          try {
+        case PlatformType.KOKO:
+          {
             defaultPointerFile = await fs.readFileSync(
               `./data/pointers/koko.ini`
             )
-          } catch (error) {
-            winston.error(error, {
-              metadata: {
-                user: this.socket.user ? this.socket.user.id : null,
-                client: this.socket.client ? this.socket.client.id : null,
-                processId: this.socket.processId,
-                crc: this.socket.fileCRC,
-                ip: this.socket.remoteAddress,
-              },
-            })
           }
-        }
-        break
+          break
 
-      case PlatformType.STKO:
-        {
-          try {
+        case PlatformType.STKO:
+          {
             defaultPointerFile = await fs.readFileSync(
               `./data/pointers/stko.ini`
             )
-          } catch (error) {
-            winston.error(error, {
-              metadata: {
-                user: this.socket.user ? this.socket.user.id : null,
-                client: this.socket.client ? this.socket.client.id : null,
-                processId: this.socket.processId,
-                crc: this.socket.fileCRC,
-                ip: this.socket.remoteAddress,
-              },
-            })
           }
-        }
-        break
-    }
+          break
+      }
 
-    if (defaultPointerFile) {
-      winston.info(`Pointer: List sended`, {
-        metadata: {
-          user: this.socket.user ? this.socket.user.id : null,
-          client: this.socket.client ? this.socket.client.id : null,
-          processId: this.socket.processId,
-          crc: this.socket.fileCRC,
-          ip: this.socket.remoteAddress,
-        },
-      })
-      this.send(defaultPointerFile, defaultPointerFile.length)
-    } else {
-      winston.info(`Pointer: Unable to send pointer due to technical problem`, {
-        metadata: {
-          user: this.socket.user ? this.socket.user.id : null,
-          client: this.socket.client ? this.socket.client.id : null,
-          processId: this.socket.processId,
-          crc: this.socket.fileCRC,
-          ip: this.socket.remoteAddress,
-        },
+      if (defaultPointerFile) {
+        this.server.serverLogger.info(`Pointer: List sended`, {
+          metadata: this.socket.metadata,
+        })
+        this.send(defaultPointerFile, defaultPointerFile.length)
+      } else {
+        this.server.serverLogger.info(
+          `Pointer: Unable to send pointer due to technical problem`,
+          {
+            metadata: this.socket.metadata,
+          }
+        )
+      }
+    } catch (error) {
+      this.server.serverLogger.error(error, {
+        metadata: this.socket.metadata,
       })
     }
   }
@@ -147,7 +84,7 @@ class Injection extends Event {
     packet.writeUnsignedInt(bufferLength)
     packet.write(buffer)
 
-    this.socket.emit('send', packet.raw)
+    this.socket.emit('send', packet.raw, true)
   }
 }
 

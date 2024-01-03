@@ -7,9 +7,7 @@ import ClientModel from '../models/client.js'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import validator from 'validator'
-import SessionModel from '../models/session.js'
 import VersionModel from '../models/version.js'
-import winston from 'winston'
 
 class Login extends Event {
   constructor(server, socket) {
@@ -17,118 +15,132 @@ class Login extends Event {
       header: PacketHeader.LOGIN,
       authorization: false,
       rateLimitOpts: {
-        points: 16,
+        points: 8,
         duration: 1, // Per second
       },
     })
   }
 
   async recv(packet) {
-    const type = packet.readUnsignedByte()
+    try {
+      const type = packet.readUnsignedByte()
 
-    let token = null
-    let clientHardwareInfo = {}
-    let socket = this.socket
-    let statusMessage = 'Bilinmeyen Hata'
+      let token = null
+      let user = null
 
-    switch (type) {
-      case LoginType.GENERIC:
-        {
-          const email = packet.readString(true)
-          const password = packet.readString(true)
+      switch (type) {
+        case LoginType.GENERIC:
+          {
+            const email = packet.readString(true)
+            const password = packet.readString(true)
 
-          if (!email || !password) return
+            if (!email || !password) return
 
-          if (!validator.isEmail(email)) {
-            winston.warn(`Login: ${email} - is not valid email`, {
-              metadata: {
-                user: socket.user ? socket.user.id : null,
-                client: socket.client ? socket.client.id : null,
-                processId: socket.processId,
-                crc: socket.fileCRC,
-                ip: socket.remoteAddress,
-              },
-            })
+            if (!validator.isEmail(email)) {
+              this.server.serverLogger.warn(
+                `Login: ${email} - is not valid email`,
+                {
+                  metadata: this.socket.metadata,
+                }
+              )
 
-            return this.send({
-              type: type,
-              status: 0,
-              message: 'Aktivasyon bilgileri hatali',
-            })
-          }
-
-          clientHardwareInfo.systemName = packet.readString(true)
-          clientHardwareInfo.uuid = packet.readString(true)
-          clientHardwareInfo.systemSerialNumber = packet.readString(true)
-          clientHardwareInfo.gpu = packet.readString(true)
-
-          socket.user = await UserModel.findOne({ email: email })
-
-          if (socket.user) {
-            if (!(await bcrypt.compare(password, socket.user.password))) {
-              socket.user = null
-              winston.warn(`Login: ${email} - password does not match`, {
-                metadata: {
-                  user: socket.user ? socket.user.id : null,
-                  client: socket.client ? socket.client.id : null,
-                  processId: socket.processId,
-                  crc: socket.fileCRC,
-                  ip: socket.remoteAddress,
-                },
-              })
               return this.send({
                 type: type,
                 status: 0,
                 message: 'Aktivasyon bilgileri hatali',
               })
             }
-          } else {
-            if (process.env.AUTO_REGISTRATION == 1) {
-              winston.warn(
-                `Login: ${email} - not found, auto registration in progress`,
-                {
-                  metadata: {
-                    user: socket.user ? socket.user.id : null,
-                    client: socket.client ? socket.client.id : null,
-                    processId: socket.processId,
-                    crc: socket.fileCRC,
-                    ip: socket.remoteAddress,
-                  },
-                }
-              )
 
-              const hashedPassword = await bcrypt.hash(password, 10)
+            user = await UserModel.findOne({ email: email })
 
-              const today = new Date()
-              const futureDate = new Date()
-              futureDate.setDate(today.getDate() + 3)
-
-              await UserModel.create({
-                email: email,
-                password: hashedPassword,
-                subscriptionEndAt: futureDate,
-              }).then((createdUser) => {
-                socket.user = createdUser
-                winston.info(`Login: ${createdUser.email} - created`, {
-                  metadata: {
-                    user: socket.user ? socket.user.id : null,
-                    client: socket.client ? socket.client.id : null,
-                    processId: socket.processId,
-                    crc: socket.fileCRC,
-                    ip: socket.remoteAddress,
-                  },
+            if (user) {
+              if (!(await bcrypt.compare(password, user.password))) {
+                user = null
+                this.server.serverLogger.warn(
+                  `Login: ${email} - password does not match`,
+                  {
+                    metadata: this.socket.metadata,
+                  }
+                )
+                return this.send({
+                  type: type,
+                  status: 0,
+                  message: 'Aktivasyon bilgileri hatali',
                 })
+              }
+              token = jwt.sign({ userId: user._id }, process.env.TOKEN_KEY, {
+                expiresIn: '15d',
               })
             } else {
-              winston.warn(`Login: ${email} - not found`, {
-                metadata: {
-                  user: socket.user ? socket.user.id : null,
-                  client: socket.client ? socket.client.id : null,
-                  processId: socket.processId,
-                  crc: socket.fileCRC,
-                  ip: socket.remoteAddress,
-                },
+              if (process.env.AUTO_REGISTRATION == 1) {
+                this.server.serverLogger.warn(
+                  `Login: ${email} - not found, auto registration in progress`,
+                  {
+                    metadata: this.socket.metadata,
+                  }
+                )
+
+                const hashedPassword = await bcrypt.hash(password, 10)
+
+                const today = new Date()
+                const futureDate = new Date()
+                futureDate.setDate(today.getDate() + 3)
+
+                await UserModel.create({
+                  email: email,
+                  password: hashedPassword,
+                  subscriptionEndAt: futureDate,
+                }).then((createdUser) => {
+                  user = createdUser
+                  this.server.serverLogger.info(
+                    `Login: ${createdUser.email} - created`,
+                    {
+                      metadata: this.socket.metadata,
+                    }
+                  )
+                  token = jwt.sign(
+                    { userId: user._id },
+                    process.env.TOKEN_KEY,
+                    {
+                      expiresIn: '15d',
+                    }
+                  )
+                })
+              } else {
+                this.server.serverLogger.warn(`Login: ${email} - not found`, {
+                  metadata: this.socket.metadata,
+                })
+
+                return this.send({
+                  type: type,
+                  status: 0,
+                  message: 'Aktivasyon basarisiz',
+                })
+              }
+            }
+          }
+          break
+        case LoginType.TOKEN:
+          try {
+            token = packet.readString(true)
+
+            if (!token)
+              return this.send({
+                type: type,
+                status: 0,
+                message: 'Aktivasyon basarisiz',
               })
+
+            const decoded = jwt.verify(token, process.env.TOKEN_KEY)
+            user = await UserModel.findOne({ _id: decoded.userId })
+
+            if (!user) {
+              this.server.serverLogger.warn(
+                `Login: There is no user with this token`,
+                {
+                  metadata: this.socket.metadata,
+                }
+              )
 
               return this.send({
                 type: type,
@@ -136,33 +148,12 @@ class Login extends Event {
                 message: 'Aktivasyon basarisiz',
               })
             }
-          }
-        }
-        break
-      case LoginType.TOKEN:
-        try {
-          token = packet.readString(true)
-
-          if (!token) return
-
-          clientHardwareInfo.systemName = packet.readString(true)
-          clientHardwareInfo.uuid = packet.readString(true)
-          clientHardwareInfo.systemSerialNumber = packet.readString(true)
-          clientHardwareInfo.gpu = packet.readString(true)
-
-          const decoded = jwt.verify(token, process.env.TOKEN_KEY)
-          socket.user = await UserModel.findOne({ _id: decoded.userId })
-
-          if (!socket.user) {
-            winston.warn(`Login: There is no user with this token`, {
-              metadata: {
-                user: socket.user ? socket.user.id : null,
-                client: socket.client ? socket.client.id : null,
-                processId: socket.processId,
-                crc: socket.fileCRC,
-                ip: socket.remoteAddress,
-              },
+          } catch (err) {
+            this.server.serverLogger.error(err, {
+              metadata: this.socket.metadata,
             })
+
+            user = null
 
             return this.send({
               type: type,
@@ -170,127 +161,96 @@ class Login extends Event {
               message: 'Aktivasyon basarisiz',
             })
           }
-        } catch (err) {
-          winston.error(err, {
-            metadata: {
-              user: socket.user ? socket.user.id : null,
-              client: socket.client ? socket.client.id : null,
-              processId: socket.processId,
-              crc: socket.fileCRC,
-              ip: socket.remoteAddress,
-            },
-          })
-          socket.user = null
+          break
+      }
 
+      if (user) {
+        user.updatedAt = Date.now()
+        user.save()
+
+        const today = new Date()
+        const subscriptionEndAt = new Date(user.subscriptionEndAt)
+
+        if (today > subscriptionEndAt) {
+          this.server.serverLogger.warn(
+            `Login: ${user.email} - Account has subscription time end`,
+            {
+              metadata: this.socket.metadata,
+            }
+          )
+
+          return this.send({
+            type: type,
+            status: 0,
+            message: 'Abonelik sureniz doldu',
+          })
+        }
+
+        let client = await ClientModel.findOne({
+          systemName: this.socket.metadata.client.systemName,
+          uuid: this.socket.metadata.client.uuid,
+          systemSerialNumber: this.socket.metadata.client.systemSerialNumber,
+          gpu: this.socket.metadata.client.gpu,
+        })
+
+        if (!client) {
+          if (user.credit == 0) {
+            this.server.serverLogger.warn(
+              `Login: ${user.email} - Account has no credit limit for create new client`,
+              {
+                metadata: this.socket.metadata,
+              }
+            )
+
+            return this.send({
+              type: type,
+              status: 0,
+              message: 'Aktivasyon icin yeterli kredi yok',
+            })
+          }
+
+          await ClientModel.create({
+            userId: user._id,
+            systemName: this.socket.metadata.client.systemName,
+            uuid: this.socket.metadata.client.uuid,
+            systemSerialNumber: this.socket.metadata.client.systemSerialNumber,
+            gpu: this.socket.metadata.client.gpu,
+            ip: this.socket.remoteAddress.replace('::ffff:', ''),
+          }).then(async (createdClient) => {
+            client = createdClient
+
+            if (user.credit != -1) {
+              if (user.credit < -1) {
+                user.credit = -1
+              } else {
+                user.credit--
+              }
+
+              user.save()
+            }
+
+            this.server.serverLogger.info(
+              `Login: ${user.email} - client ${client._id} created`,
+              {
+                metadata: this.socket.metadata,
+              }
+            )
+          })
+        }
+
+        if (!client) {
           return this.send({
             type: type,
             status: 0,
             message: 'Aktivasyon basarisiz',
           })
         }
-        break
-    }
 
-    if (socket.user) {
-      socket.user.updatedAt = Date.now()
-      socket.user.save()
-
-      const today = new Date()
-      const subscriptionEndAt = new Date(socket.user.subscriptionEndAt)
-
-      if (today > subscriptionEndAt) {
-        winston.warn(
-          `Login: ${socket.user.email} - Account has subscription time end`,
-          {
-            metadata: {
-              user: socket.user ? socket.user.id : null,
-              client: socket.client ? socket.client.id : null,
-              processId: socket.processId,
-              crc: socket.fileCRC,
-              ip: socket.remoteAddress,
-            },
-          }
-        )
-
-        return this.send({
-          type: type,
-          status: 0,
-          message: 'Abonelik sureniz doldu',
-        })
-      }
-
-      let findedClient = await ClientModel.findOne({
-        systemName: clientHardwareInfo.systemName,
-        uuid: clientHardwareInfo.uuid,
-        systemSerialNumber: clientHardwareInfo.systemSerialNumber,
-        gpu: clientHardwareInfo.gpu,
-      })
-
-      if (!findedClient) {
-        if (socket.user.credit == 0) {
-          winston.warn(
-            `Login: ${socket.user.email} - Account has no credit limit for create new client`,
+        if (!client.userId.equals(user._id)) {
+          this.server.serverLogger.warn(
+            `Login: ${user.email} - client ${client._id} registered another user (${client.userId} != ${user._id})`,
             {
-              metadata: {
-                user: socket.user ? socket.user.id : null,
-                client: socket.client ? socket.client.id : null,
-                processId: socket.processId,
-                crc: socket.fileCRC,
-                ip: socket.remoteAddress,
-              },
-            }
-          )
-
-          return this.send({
-            type: type,
-            status: 0,
-            message: 'Aktivasyon icin yeterli kredi yok',
-          })
-        }
-
-        await ClientModel.create({
-          userId: socket.user._id,
-          systemName: clientHardwareInfo.systemName,
-          uuid: clientHardwareInfo.uuid,
-          systemSerialNumber: clientHardwareInfo.systemSerialNumber,
-          gpu: clientHardwareInfo.gpu,
-          ip: socket.remoteAddress,
-        }).then(async (client) => {
-          socket.client = client
-
-          socket.data.clientId = socket.client.id
-          await socket.data.save()
-
-          if (socket.user.credit != -1) {
-            socket.user.credit--
-            socket.user.save()
-          }
-
-          winston.info(
-            `Login: ${socket.user.email} - client ${client._id} created`,
-            {
-              metadata: {
-                user: socket.user ? socket.user.id : null,
-                client: socket.client ? socket.client.id : null,
-                processId: socket.processId,
-                crc: socket.fileCRC,
-                ip: socket.remoteAddress,
-              },
-            }
-          )
-        })
-      } else {
-        if (!socket.user._id.equals(socket.user.id)) {
-          winston.warn(
-            `Login: ${socket.user.email} - client ${findedClient._id} registered another user (${findedClient.userId} != ${socket.user._id})`,
-            {
-              metadata: {
-                user: socket.user ? socket.user.id : null,
-                client: socket.client ? socket.client.id : null,
-                processId: socket.processId,
-                crc: socket.fileCRC,
-                ip: socket.remoteAddress,
-              },
+              metadata: this.socket.metadata,
             }
           )
 
@@ -301,80 +261,57 @@ class Login extends Event {
           })
         }
 
-        findedClient.ip = socket.remoteAddress
-        findedClient.updatedAt = Date.now()
+        let activeClientSession = this.server.clients.get(client._id)
 
-        await findedClient.save()
+        if (activeClientSession) {
+          this.server.serverLogger.warn(
+            `Login: ${user.email} - client ${client._id} another client session active)`,
+            {
+              metadata: this.socket.metadata,
+            }
+          )
 
-        socket.client = findedClient
+          return this.send({
+            type: type,
+            status: 0,
+            message: 'Client baska yerde calisiyor',
+          })
+        }
 
-        winston.info(
-          `Login: ${socket.user.email} - client ${socket.client._id}`,
+        this.server.serverLogger.info(
+          `Login: ${user.email} - client ${client._id} login`,
           {
-            metadata: {
-              user: socket.user ? socket.user.id : null,
-              client: socket.client ? socket.client.id : null,
-              processId: socket.processId,
-              crc: socket.fileCRC,
-              ip: socket.remoteAddress,
-            },
+            metadata: this.socket.metadata,
           }
         )
-      }
 
-      this.socket.data = await SessionModel.findOneAndUpdate(
-        { _id: this.socket.data.id },
-        {
-          $set: {
-            userId: socket.user.id,
-            clientId: socket.client.id,
-          },
-        },
-        { new: true }
-      )
+        client.ip = this.socket.remoteAddress.replace('::ffff:', '')
+        client.updatedAt = Date.now()
 
-      switch (type) {
-        case LoginType.GENERIC:
-          {
-            token = jwt.sign(
-              { userId: socket.user._id },
-              process.env.TOKEN_KEY,
-              {
-                expiresIn: '365d',
-              }
-            )
+        await client.save()
 
-            this.socket.token = token
-          }
-          break
+        this.socket.metadata.userId = user._id
+        this.socket.metadata.clientId = client._id
 
-        case LoginType.TOKEN:
-          {
-            this.socket.token = token
-          }
-          break
-      }
+        this.server.users.set(this.socket.metadata.userId, this.socket)
+        this.server.clients.set(this.socket.metadata.clientId, this.socket)
 
-      let versionInfo = await VersionModel.findOne({
-        status: 1,
-        crc: this.socket.fileCRC,
-      })
-
-      if (versionInfo) {
-        return this.send({
-          type: type,
+        const versionInfo = await VersionModel.findOne({
           status: 1,
-          token: token,
-          subscriptionEndAt: socket.user.subscriptionEndAt.getTime(),
+          crc: this.socket.metadata.fileCRC,
         })
-      } else {
+
         return this.send({
           type: type,
-          status: 2,
+          status: versionInfo ? 1 : 2,
           token: token,
-          subscriptionEndAt: socket.user.subscriptionEndAt.getTime(),
+          subscriptionEndAt: user.subscriptionEndAt.getTime(),
         })
       }
+    } catch (error) {
+      this.server.serverLogger.error(error, {
+        metadata: this.socket.metadata,
+      })
     }
   }
 

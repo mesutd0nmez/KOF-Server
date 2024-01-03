@@ -2,6 +2,9 @@ import mongoose from 'mongoose'
 
 const versionSchema = mongoose.Schema(
   {
+    fileName: {
+      type: String,
+    },
     crc: {
       type: String,
     },

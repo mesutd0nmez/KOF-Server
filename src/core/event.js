@@ -1,18 +1,17 @@
-import jwt from 'jsonwebtoken'
 import winston from 'winston'
+import UserModel from '../models/user.js'
 
 class Event {
   constructor(server, socket, options) {
     Object.defineProperty(this, 'server', { value: server })
     Object.defineProperty(this, 'socket', { value: socket })
     this.options = options
-    this.options.userId = 0
   }
 
   async validateToken() {
     try {
-      const decoded = jwt.verify(this.socket.token, process.env.TOKEN_KEY)
-      this.options.userId = decoded.userId
+      const user = await UserModel.findOne({ _id: this.socket.metadata.userId })
+      if (!user) return false
     } catch (err) {
       return false
     }
@@ -23,7 +22,7 @@ class Event {
   async middleWareRecv() {
     if (
       this.options.authorization &&
-      (!this.validateToken() || this.socket == -1)
+      (!this.validateToken() || this.socket.id == 0 || !this.socket.ready)
     ) {
       return false
     }
@@ -34,23 +33,27 @@ class Event {
   async handleRecv(packet) {
     try {
       this.rateLimiter
-        .consume(this.socket.remoteAddress, 1)
+        .consume(this.socket.remoteAddress.replace('::ffff:', ''), 1)
         .then(() => {
           if (this.middleWareRecv()) {
             this.recv(packet)
           } else {
-            winston.warn(`Middleware: Invalid token, connection destroying`)
+            this.server.serverLogger.warn(
+              `Middleware: Invalid token, connection destroying`
+            )
             this.socket.destroy()
           }
         })
         .catch(() => {
-          winston.warn(
-            `${this.socket.remoteAddress} - Event request rate limited, connection destroying`
+          this.server.serverLogger.warn(
+            `${this.socket.remoteAddress.replace(
+              '::ffff:',
+              ''
+            )} - Event request rate limited, connection destroying`
           )
-          this.socket.destroy()
         })
     } catch (err) {
-      winston.error(err)
+      this.server.serverLogger.error(err)
     }
   }
 
@@ -64,7 +67,7 @@ class Event {
         this.send(...args)
       }
     } catch (err) {
-      winston.error(err)
+      this.server.serverLogger.error(err)
     }
   }
 }
