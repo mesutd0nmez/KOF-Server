@@ -13,7 +13,8 @@ After completing the necessary requirements, you can start the KOF-Server
 - [Requirements](#requirements)
 - [Configuration](#configuration)
 - [Installation](#installation)
-
+- [Development](#development)
+- [Production](#production)
 ## Requirements
 
 - Docker
