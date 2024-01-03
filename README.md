@@ -35,15 +35,17 @@ Currently, the API is only functioning at the **/v1/** path, and any changes wil
 
 ## Encryption
 
-**KOF-Server** utilizes **AES-256 CFB** encryption, and the keys for this encryption are configured through the **.env** file.
+**KOF-Server** utilizes **AES-256 CFB** encryption, and the keys for this encryption are configured through the **.env** file
 
 These keys must be **64** characters in length.
 
-When generating the keys, it is also to replace them in the ***KOF.Bot\Service.cpp*** and ***KOF.Bot\Cryption.h*** files.
+When generating the keys, it is also to replace them in the ***KOF.Bot\Service.cpp*** and ***KOF.Bot\Cryption.h*** files
 
 ## Compression
 
-As the default compression, lzf is used; however, snappy has been added as an option. Snappy has not been used for some time due to issues with [KOF-Bot](https://github.com/trkyshorty/KOF-Bot) on certain older hardware.
+As the default compression, **lzf** is used; however, **snappy** has been added as an option. Snappy has not been used for some time due to issues with [KOF-Bot](https://github.com/trkyshorty/KOF-Bot) on certain older hardware
+
+You can modify compression settings via the **.env** file
 
 ## Configuration
 
