@@ -7,7 +7,7 @@
 ### Method: POST
 >
 >```
->{{url}}/admin/users
+>/admin/users
 >```
 >
 ### 🔑 Authentication bearer
@@ -23,7 +23,7 @@
 ### Method: GET
 >
 >```
->{{url}}/admin/users?email=
+>/admin/users?email=
 >```
 >
 ### Query Params
@@ -45,7 +45,7 @@
 ### Method: PATCH
 >
 >```
->{{url}}/admin/users?email=
+>/admin/users?email=
 >```
 >
 ### Query Params
@@ -69,7 +69,7 @@
 ### Method: PUT
 >
 >```
->{{url}}/admin/firewall/ip
+>/admin/firewall/ip
 >```
 >
 ### 🔑 Authentication bearer
@@ -85,7 +85,7 @@
 ### Method: DELETE
 >
 >```
->{{url}}/admin/firewall/ip
+>/admin/firewall/ip
 >```
 >
 ### 🔑 Authentication bearer
@@ -101,7 +101,7 @@
 ### Method: POST
 >
 >```
->{{url}}/admin/firewall/ip
+>/admin/firewall/ip
 >```
 >
 ### 🔑 Authentication bearer
@@ -119,7 +119,7 @@
 ### Method: PATCH
 >
 >```
->{{url}}/admin/maintenance/pointer
+>/admin/maintenance/pointer
 >```
 >
 ### Body formdata
@@ -141,7 +141,7 @@
 ### Method: PUT
 >
 >```
->{{url}}/admin/maintenance/library
+>/admin/maintenance/library
 >```
 >
 ### Body formdata
@@ -163,7 +163,7 @@
 ### Method: PUT
 >
 >```
->{{url}}/admin/maintenance/version
+>/admin/maintenance/version
 >```
 >
 ### Body formdata
@@ -188,7 +188,7 @@
 ### Method: DELETE
 >
 >```
->{{url}}/admin/maintenance/version
+>/admin/maintenance/version
 >```
 >
 ### Body formdata
@@ -209,7 +209,7 @@
 ### Method: PUT
 >
 >```
->{{url}}/admin/maintenance/updater
+>/admin/maintenance/updater
 >```
 >
 ### Body formdata
@@ -231,7 +231,7 @@
 ### Method: POST
 >
 >```
->{{url}}/admin/maintenance/disconnect
+>/admin/maintenance/disconnect
 >```
 >
 ### 🔑 Authentication bearer
@@ -247,7 +247,7 @@
 ### Method: POST
 >
 >```
->{{url}}/admin/maintenance/restart
+>/admin/maintenance/restart
 >```
 >
 ### 🔑 Authentication bearer
