@@ -1,11 +1,10 @@
 import express from 'express'
-import UserModel from '../../models/user.js'
-import ConfigurationModel from '../../models/configuration.js'
-import ClientModel from '../../models/client.js'
+import UserModel from '../../../models/user.js'
+import ConfigurationModel from '../../../models/configuration.js'
+import ClientModel from '../../../models/client.js'
 import crypto from 'crypto'
 import validator from 'validator'
 import bcrypt from 'bcryptjs'
-import winston from 'winston'
 
 const router = express.Router()
 
@@ -25,45 +24,40 @@ function generateSecurePassword() {
 }
 
 router.get('/', async (req, res) => {
-  const { email } = req.query
-
-  if (!email) return res.status(400).send({ status: 'Invalid request' })
-
-  if (!validator.isEmail(email)) {
-    return res.status(400).send({ status: 'Invalid request' })
-  }
-
   try {
-    const user = await UserModel.findOne({ email: email })
+    const { email } = req.query
+
+    if (!email) return res.status(400).send({ status: 'Invalid request' })
+
+    if (!validator.isEmail(email)) {
+      return res.status(400).send({ status: 'Invalid request' })
+    }
+
+    const user = await UserModel.findOne({ email: email }).select('-password')
 
     if (user) {
       const configuration = await ConfigurationModel.find({
         userId: user._id,
       })
-        .select('platform server name createdAt updatedAt')
         .where('appType')
         .gt(0)
 
       const client = await ClientModel.find({
         userId: user._id,
-      }).select('systemName ip createdAt updatedAt')
+      })
 
       return res.send({
-        user: {
-          email: user.email,
-          credit: user.credit,
-          subscriptionEndAt: user.subscriptionEndAt,
-          configuredPlayerCount: configuration.length,
-          activatedClientCount: client.length,
-          configuration: configuration,
-          client: client,
-        },
+        user: user,
+        configuredPlayerCount: configuration.length,
+        activatedClientCount: client.length,
+        configuration: configuration,
+        client: client,
       })
     } else {
       return res.send({ status: `User ${email} doesn't exist` })
     }
   } catch (error) {
-    winston.error(error)
+    req.app.logger.error(error)
     return res.status(400).send({ status: 'Invalid request' })
   }
 })
@@ -108,13 +102,14 @@ router.post('/', async (req, res) => {
       })
     }
   } catch (error) {
-    winston.error(error)
+    req.app.logger.error(error)
     return res.status(400).send({ status: 'Invalid request' })
   }
 })
 
 router.patch('/', async (req, res) => {
-  const { email, credit, day, password } = req.body
+  const { email } = req.query
+  const { credit, day, password } = req.body
 
   if (!email) return res.status(400).send({ status: 'Invalid request' })
 
@@ -146,7 +141,7 @@ router.patch('/', async (req, res) => {
       return res.send({ status: `User ${email} doesn't exist` })
     }
   } catch (error) {
-    winston.error(error)
+    req.app.logger.error(error)
     return res.status(400).send({ status: 'Invalid request' })
   }
 })
