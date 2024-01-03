@@ -23,7 +23,7 @@ After completing the necessary requirements, you can start the KOF-Server
 
 ## Encryption
 
-KOF-Server utilizes **AES-256 CBC** encryption, and the keys for this encryption are configured through the **.env** file.
+KOF-Server utilizes **AES-256 CFB** encryption, and the keys for this encryption are configured through the **.env** file.
 
 These keys must be **64** characters in length.
 
