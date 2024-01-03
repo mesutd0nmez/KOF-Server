@@ -16,9 +16,18 @@ After completing the necessary requirements, you can start the KOF-Server
 - [Installation](#installation)
 - [Development](#development)
 - [Production](#production)
+
 ## Requirements
 
 - Docker
+
+- ## Encryption
+
+KOF-Server utilizes **AES-256 CBC** encryption, and the keys for this encryption are configured through the **.env** file.
+
+These keys must be **64** characters in length.
+
+When generating the keys, it is also to replace them in the ***KOF.Bot\Service.cpp*** and ***KOF.Bot\Cryption.h*** files.
 
 ## Configuration
 
@@ -29,14 +38,6 @@ cp .env.example .env
 ```
 
 After opening the .env file with any text editor and completing the necessary settings, you can proceed with the installation
-
-## Encryption
-
-KOF-Server utilizes **AES-256 CBC** encryption, and the keys for this encryption are configured through the **.env** file.
-
-These keys must be **64** characters in length.
-
-When generating the keys, it is also to replace them in the ***KOF.Bot\Service.cpp*** and ***KOF.Bot\Cryption.h*** files.
 
 ## Installation
 
