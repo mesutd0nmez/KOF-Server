@@ -19,7 +19,8 @@ After completing the necessary requirements, you can start the KOF-Server
 
 ## Requirements
 
-- Docker
+- [Docker](https://www.docker.com/)
+- [Node.js](https://nodejs.org/en/download/current)
 
 ## Encryption
 
@@ -51,10 +52,16 @@ After configuring the necessary settings, proceed to start
 npm install
 ```
 
-After the installation is complete, run the following command to start server:
+After the installation is complete, run the following command to start server
 
 ```bash
 npm run dev
+```
+
+If you want to running in the production environment, use the following command
+
+```bash
+npm run prod
 ```
 
 ## Production
@@ -63,13 +70,19 @@ npm run dev
 docker compose build
 ```
 
-After the installation is complete, run the following command to start server:
+After the installation is complete, run the following command to start server
 
 ```bash
-docker compose up
+npm run docker:prod
 ```
 
-Use the following command for update:
+If you want to running in the development environment, use the following command
+
+```bash
+npm run docker:dev
+```
+
+Use the following command for update
 
 ```bash
 docker compose --no-cache build
