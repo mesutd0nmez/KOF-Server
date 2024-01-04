@@ -11,6 +11,7 @@ const PacketHeader = {
   REPORT: 9,
   VITAL: 10,
   SCREENSHOT: 11,
+  PURCHASE: 12,
 }
 
 export default PacketHeader

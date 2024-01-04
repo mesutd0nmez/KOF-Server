@@ -10,8 +10,10 @@ class Event {
 
   async validateToken() {
     try {
-      const user = await UserModel.findOne({ _id: this.socket.metadata.userId })
-      if (!user) return false
+      this.socket.user = await UserModel.findOne({
+        _id: this.socket.metadata.userId,
+      })
+      if (!this.socket.user) return false
     } catch (err) {
       return false
     }
@@ -39,7 +41,8 @@ class Event {
             this.recv(packet)
           } else {
             this.server.serverLogger.warn(
-              `Middleware: Invalid token, connection destroying`
+              `Middleware: Invalid token, connection destroying`,
+              { metadata: this.socket.metadata }
             )
             this.socket.destroy()
           }
@@ -49,11 +52,13 @@ class Event {
             `${this.socket.remoteAddress.replace(
               '::ffff:',
               ''
-            )} - Event request rate limited, connection destroying`
+            )} - Event request rate limited, connection destroying`,
+            { metadata: this.socket.metadata }
           )
+          this.socket.destroy()
         })
     } catch (err) {
-      this.server.serverLogger.error(err)
+      this.server.serverLogger.error(err, { metadata: this.socket.metadata })
     }
   }
 
@@ -67,7 +72,7 @@ class Event {
         this.send(...args)
       }
     } catch (err) {
-      this.server.serverLogger.error(err)
+      this.server.serverLogger.error(err, { metadata: this.socket.metadata })
     }
   }
 }

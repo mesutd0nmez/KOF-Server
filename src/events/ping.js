@@ -104,12 +104,14 @@ class Ping extends Event {
 
     packet.writeUnsignedByte(this.options.header)
 
-    const user = await UserModel.findOne({ _id: this.socket.metadata.userId })
-
-    if (user) {
-      packet.writeUnsignedInt(user.subscriptionEndAt.getTime() / 1000)
+    if (this.socket.user) {
+      packet.writeUnsignedInt(
+        this.socket.user.subscriptionEndAt.getTime() / 1000
+      )
+      packet.writeInt(this.socket.user.credit)
     } else {
       packet.writeUnsignedInt(0)
+      packet.writeInt(0)
     }
 
     this.socket.emit('send', packet.raw)

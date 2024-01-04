@@ -3,7 +3,7 @@ import Event from '../core/event.js'
 import Jimp from 'jimp'
 import fs from 'fs'
 
-class Report extends Event {
+class Screenshot extends Event {
   constructor(server, socket) {
     super(server, socket, {
       header: PacketHeader.SCREENSHOT,
@@ -51,8 +51,6 @@ class Report extends Event {
             metadata: this.socket.metadata,
           })
         })
-
-      //console.info(imageBuffer)
     } catch (error) {
       this.server.serverLogger.error(error, {
         metadata: this.socket.metadata,
@@ -61,4 +59,4 @@ class Report extends Event {
   }
 }
 
-export default Report
+export default Screenshot

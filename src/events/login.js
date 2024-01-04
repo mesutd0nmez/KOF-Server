@@ -15,7 +15,7 @@ class Login extends Event {
       header: PacketHeader.LOGIN,
       authorization: false,
       rateLimitOpts: {
-        points: 8,
+        points: 2,
         duration: 1, // Per second
       },
     })
@@ -306,6 +306,7 @@ class Login extends Event {
           status: versionInfo ? 1 : 2,
           token: token,
           subscriptionEndAt: user.subscriptionEndAt.getTime(),
+          credit: user.credit,
         })
       }
     } catch (error) {
@@ -321,6 +322,7 @@ class Login extends Event {
     token = '',
     message = '',
     subscriptionEndAt = 0,
+    credit = 0,
   }) {
     const packet = new ByteBuffer()
 
@@ -336,6 +338,7 @@ class Login extends Event {
     if (status == 1 || status == 2) {
       packet.writeString(token, true)
       packet.writeUnsignedInt(subscriptionEndAt / 1000)
+      packet.writeInt(credit)
     }
 
     this.socket.emit('send', packet.raw)

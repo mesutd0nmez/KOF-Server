@@ -22,6 +22,7 @@ import authLoginRouter from './routes/v1/auth/login.js'
 import adminUsersRouter from './routes/v1/admin/users.js'
 import adminFirewallRouter from './routes/v1/admin/firewall.js'
 import adminMaintenanceRouter from './routes/v1/admin/maintenance.js'
+import storePurchaseRouter from './routes/v1/store/purchase.js'
 
 class Server extends EventEmitter {
   constructor(options) {
@@ -204,6 +205,8 @@ class Server extends EventEmitter {
 
     socket.lastPongTime = 0
     socket.lastPingTime = 0
+
+    socket.user = {}
 
     socket.metadata = {
       processId: -1,
@@ -590,8 +593,11 @@ class Server extends EventEmitter {
 
     this.express.set('trust proxy', true)
 
-    //Routes
+    //Public Routes
     this.express.use('/v1/auth/login', authLoginRouter)
+    this.express.use('/v1/store/purchase', storePurchaseRouter)
+
+    //Admin Routes
     this.express.use('/v1/admin/users', adminMiddleware, adminUsersRouter)
     this.express.use('/v1/admin/firewall', adminMiddleware, adminFirewallRouter)
     this.express.use(
