@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import VersionStatus from '../core/enums/versionStatus.js'
 
 const versionSchema = mongoose.Schema(
   {
@@ -10,7 +11,7 @@ const versionSchema = mongoose.Schema(
     },
     status: {
       type: Number,
-      enum: [0, 1],
+      enum: [VersionStatus.OUTDATED, VersionStatus.RELEASE],
       default: 0,
     },
   },
