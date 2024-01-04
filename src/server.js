@@ -458,14 +458,11 @@ class Server extends EventEmitter {
                 if (process.env.COMPRESSION_METHOD == 'snappy') {
                   encryptionPacket.writeUnsignedByte(1) //compression flag
                   encryptionPacket.writeUnsignedInt(data.length) //raw packet size
-                  console.info(data.length)
                   const compressedData = await Snappy.compress(data)
-                  console.info(compressedData.length)
                   encryptionPacket.write(compressedData) //compressed data
                 } else {
                   encryptionPacket.writeUnsignedByte(1) //compression flag
                   encryptionPacket.writeUnsignedInt(data.length) //raw packet size
-                  console.info(data.length)
                   var compressedData = lzf.compress(data)
                   encryptionPacket.write(compressedData) //compressed data
                 }
