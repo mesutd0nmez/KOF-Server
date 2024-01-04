@@ -121,18 +121,22 @@ router.patch('/', async (req, res) => {
     const user = await UserModel.findOne({ email: email })
 
     if (user) {
-      user.credit = credit
+      if (credit) {
+        user.credit = credit
+      }
 
       if (password) {
         const hashedPassword = await bcrypt.hash(password, 10)
         user.password = hashedPassword
       }
 
-      const today = new Date()
-      const futureDate = new Date()
-      futureDate.setDate(today.getDate() + parseInt(day))
+      if (day) {
+        const today = new Date()
+        const futureDate = new Date()
+        futureDate.setDate(today.getDate() + parseInt(day))
 
-      user.subscriptionEndAt = futureDate
+        user.subscriptionEndAt = futureDate
+      }
 
       user.save()
 
