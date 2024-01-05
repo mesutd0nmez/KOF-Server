@@ -1,7 +1,6 @@
 import PacketHeader from '../core/enums/packetHeader.js'
 import Event from '../core/event.js'
 import { ByteBuffer } from '../utils/byteBuffer.js'
-import UserModel from '../models/user.js'
 
 class Ping extends Event {
   constructor(server, socket) {

@@ -168,24 +168,6 @@ class Login extends Event {
         user.updatedAt = Date.now()
         user.save()
 
-        const today = new Date()
-        const subscriptionEndAt = new Date(user.subscriptionEndAt)
-
-        if (today > subscriptionEndAt) {
-          this.server.serverLogger.warn(
-            `Login: ${user.email} - Account has subscription time end`,
-            {
-              metadata: this.socket.metadata,
-            }
-          )
-
-          return this.send({
-            type: type,
-            status: 0,
-            message: 'Abonelik sureniz doldu',
-          })
-        }
-
         let client = await ClientModel.findOne({
           systemName: this.socket.metadata.client.systemName,
           uuid: this.socket.metadata.client.uuid,

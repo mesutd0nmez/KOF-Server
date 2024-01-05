@@ -9,6 +9,7 @@ class Injection extends Event {
     super(server, socket, {
       header: PacketHeader.INJECTION,
       authorization: true,
+      subscribed: true,
       rateLimitOpts: {
         points: 8,
         duration: 1, // Per second

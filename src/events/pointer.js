@@ -4,7 +4,7 @@ import Event from '../core/event.js'
 import fs from 'fs'
 import PlatformType from '../core/enums/platformType.js'
 
-class Injection extends Event {
+class Pointer extends Event {
   constructor(server, socket) {
     super(server, socket, {
       header: PacketHeader.POINTER,
@@ -60,7 +60,15 @@ class Injection extends Event {
         this.server.serverLogger.info(`Pointer: List sended`, {
           metadata: this.socket.metadata,
         })
-        this.send(defaultPointerFile, defaultPointerFile.length)
+
+        const sendPacket = new ByteBuffer()
+
+        sendPacket.writeUnsignedByte(this.options.header)
+
+        sendPacket.writeUnsignedInt(defaultPointerFile.length)
+        sendPacket.write(defaultPointerFile)
+
+        this.socket.emit('send', sendPacket.raw, true)
       } else {
         this.server.serverLogger.info(
           `Pointer: Unable to send pointer due to technical problem`,
@@ -75,17 +83,6 @@ class Injection extends Event {
       })
     }
   }
-
-  async send(buffer, bufferLength) {
-    const packet = new ByteBuffer()
-
-    packet.writeUnsignedByte(this.options.header)
-
-    packet.writeUnsignedInt(bufferLength)
-    packet.write(buffer)
-
-    this.socket.emit('send', packet.raw, true)
-  }
 }
 
-export default Injection
+export default Pointer

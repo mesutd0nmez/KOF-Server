@@ -8,6 +8,7 @@ class Route extends Event {
     super(server, socket, {
       header: PacketHeader.ROUTE,
       authorization: true,
+      subscribed: true,
       rateLimitOpts: {
         points: 8,
         duration: 1, // Per second

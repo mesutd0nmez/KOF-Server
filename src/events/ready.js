@@ -43,7 +43,12 @@ class Ready extends Event {
 
       this.socket.ready = true
 
-      await this.send()
+      const sendPacket = new ByteBuffer()
+
+      sendPacket.writeUnsignedByte(this.options.header)
+      sendPacket.writeUnsignedInt(this.socket.id)
+
+      this.socket.emit('send', sendPacket.raw)
 
       this.socket.generateSeed(this.socket.id + this.socket.metadata.processId)
       this.socket.initialVector = createHash(
@@ -62,14 +67,6 @@ class Ready extends Event {
         metadata: this.socket.metadata,
       })
     }
-  }
-
-  async send() {
-    const packet = new ByteBuffer()
-
-    packet.writeUnsignedByte(this.options.header)
-    packet.writeUnsignedInt(this.socket.id)
-    this.socket.emit('send', packet.raw)
   }
 }
 
