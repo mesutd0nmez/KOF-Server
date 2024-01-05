@@ -1,4 +1,3 @@
-import winston from 'winston'
 import UserModel from '../models/user.js'
 
 class Event {
@@ -8,40 +7,39 @@ class Event {
     this.options = options
   }
 
-  async validateToken() {
-    try {
+  async middleWareRecv() {
+    if (this.options.authorization) {
       this.socket.user = await UserModel.findOne({
         _id: this.socket.metadata.userId,
       })
-      if (!this.socket.user) return false
-    } catch (err) {
-      return false
+
+      if (!this.socket.user) {
+        return false
+      }
+
+      if (this.options.subscribed) {
+        const currentDate = new Date()
+        const subscriptionEndAt = new Date(this.socket.user.subscriptionEndAt)
+
+        if (currentDate > subscriptionEndAt) {
+          return false
+        }
+      }
     }
 
     return true
   }
 
-  async middleWareRecv() {
-    if (
-      this.options.authorization &&
-      (!this.validateToken() || this.socket.id == 0 || !this.socket.ready)
-    ) {
-      return false
-    }
-
-    return true
-  }
-
-  async handleRecv(packet) {
+  handleRecv(packet) {
     try {
       this.rateLimiter
         .consume(this.socket.remoteAddress.replace('::ffff:', ''), 1)
-        .then(() => {
-          if (this.middleWareRecv()) {
+        .then(async () => {
+          if (await this.middleWareRecv()) {
             this.recv(packet)
           } else {
             this.server.serverLogger.warn(
-              `Middleware: Invalid token, connection destroying`,
+              `Middleware: Cannot verify session, connection destroying`,
               { metadata: this.socket.metadata }
             )
             this.socket.destroy()
@@ -49,7 +47,7 @@ class Event {
         })
         .catch(() => {
           this.server.serverLogger.warn(
-            `${this.socket.remoteAddress.replace(
+            `Middleware: ${this.socket.remoteAddress.replace(
               '::ffff:',
               ''
             )} - Event request rate limited, connection destroying`,
@@ -62,11 +60,11 @@ class Event {
     }
   }
 
-  async middleWareSend() {
+  middleWareSend() {
     return true
   }
 
-  async handleSend(...args) {
+  handleSend(...args) {
     try {
       if (this.middleWareSend()) {
         this.send(...args)
