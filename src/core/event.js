@@ -1,70 +1,76 @@
-import jwt from 'jsonwebtoken'
-import winston from 'winston'
+import UserModel from '../models/user.js'
 
 class Event {
   constructor(server, socket, options) {
     Object.defineProperty(this, 'server', { value: server })
     Object.defineProperty(this, 'socket', { value: socket })
     this.options = options
-    this.options.userId = 0
-  }
-
-  async validateToken() {
-    try {
-      const decoded = jwt.verify(this.socket.token, process.env.TOKEN_KEY)
-      this.options.userId = decoded.userId
-    } catch (err) {
-      return false
-    }
-
-    return true
   }
 
   async middleWareRecv() {
-    if (
-      this.options.authorization &&
-      (!this.validateToken() || this.socket == -1)
-    ) {
-      return false
+    if (this.options.authorization) {
+      this.socket.user = await UserModel.findOne({
+        _id: this.socket.metadata.userId,
+      })
+
+      if (!this.socket.user) {
+        return false
+      }
+
+      if (this.options.subscribed) {
+        const currentDate = new Date()
+        const subscriptionEndAt = new Date(this.socket.user.subscriptionEndAt)
+
+        if (currentDate > subscriptionEndAt) {
+          return false
+        }
+      }
     }
 
     return true
   }
 
-  async handleRecv(packet) {
+  handleRecv(packet) {
     try {
       this.rateLimiter
-        .consume(this.socket.remoteAddress, 1)
-        .then(() => {
-          if (this.middleWareRecv()) {
+        .consume(this.socket.remoteAddress.replace('::ffff:', ''), 1)
+        .then(async () => {
+          if (await this.middleWareRecv()) {
             this.recv(packet)
           } else {
-            winston.warn(`Middleware: Invalid token, connection destroying`)
+            this.server.serverLogger.warn(
+              `Middleware: Cannot verify session, connection destroying`,
+              { metadata: this.socket.metadata }
+            )
             this.socket.destroy()
           }
         })
         .catch(() => {
-          winston.warn(
-            `${this.socket.remoteAddress} - Event request rate limited, connection destroying`
+          this.server.serverLogger.warn(
+            `Middleware: ${this.socket.remoteAddress.replace(
+              '::ffff:',
+              ''
+            )} - Event request rate limited, connection destroying`,
+            { metadata: this.socket.metadata }
           )
           this.socket.destroy()
         })
     } catch (err) {
-      winston.error(err)
+      this.server.serverLogger.error(err, { metadata: this.socket.metadata })
     }
   }
 
-  async middleWareSend() {
+  middleWareSend() {
     return true
   }
 
-  async handleSend(...args) {
+  handleSend(...args) {
     try {
       if (this.middleWareSend()) {
         this.send(...args)
       }
     } catch (err) {
-      winston.error(err)
+      this.server.serverLogger.error(err, { metadata: this.socket.metadata })
     }
   }
 }

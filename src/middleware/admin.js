@@ -19,10 +19,12 @@ const verifyToken = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid token' })
     }
 
-    if (user.admin !== 1) {
-      return res
-        .status(401)
-        .json({ message: 'You are not authorized for this action' })
+    if (user.email != process.env.MASTER_USER) {
+      if (user.admin !== 1) {
+        return res
+          .status(401)
+          .json({ message: 'You are not authorized for this action' })
+      }
     }
 
     req.user = user

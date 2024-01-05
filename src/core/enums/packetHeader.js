@@ -8,6 +8,10 @@ const PacketHeader = {
   CAPTCHA: 6,
   UPDATE: 7,
   ROUTE: 8,
+  REPORT: 9,
+  VITAL: 10,
+  SCREENSHOT: 11,
+  PURCHASE: 12,
 }
 
 export default PacketHeader

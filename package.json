@@ -17,7 +17,7 @@
     "prettier:fix": "prettier --write index.js ./src/**/*.js"
   },
   "dependencies": {
-    "axios": "^1.6.2",
+    "axios": "^1.6.3",
     "bcryptjs": "^2.4.3",
     "byte-buffer": "https://github.com/trkyshorty/byte-buffer#build",
     "cors": "^2.8.5",
@@ -30,21 +30,25 @@
     "iconv-lite": "^0.6.3",
     "jimp": "^0.22.10",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.0.1",
+    "lzfjs": "^1.0.1",
+    "mongoose": "^8.0.3",
+    "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "net": "^1.0.2",
     "path": "^0.12.7",
-    "rate-limiter-flexible": "^3.0.4",
+    "rate-limiter-flexible": "^4.0.0",
+    "shopier-api": "^1.1.3",
+    "snappy": "^7.2.2",
     "validator": "^13.11.0",
     "winston": "^3.11.0",
-    "winston-mongodb": "^5.1.1"
+    "winston-daily-rotate-file": "^4.7.1"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "eslint": "^8.54.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-prettier": "^5.0.1",
-    "prettier": "^3.1.0"
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.2",
+    "prettier": "^3.1.1"
   },
   "type": "module",
   "plugins": [
